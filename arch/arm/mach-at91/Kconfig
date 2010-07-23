@@ -78,6 +78,13 @@ config ARCH_AT91SAM9G45
 	select HAVE_FB_ATMEL
 	select HAVE_NET_MACB
 
+config ARCH_AT91SAM9X5
+	bool "AT91SAM9X5"
+	select CPU_ARM926T
+	select GENERIC_CLOCKEVENTS
+	select HAVE_FB_ATMEL
+	select HAVE_NET_MACB
+
 config ARCH_AT91CAP9
 	bool "AT91CAP9"
 	select CPU_ARM926T
@@ -421,6 +428,20 @@ config MACH_AT91SAM9M10G45EK
 	  Select this if you are using Atmel's AT91SAM9G45-EKES Evaluation Kit.
 	  "ES" at the end of the name means that this board is an
 	  Engineering Sample.
+
+endif
+
+# ----------------------------------------------------------
+
+if ARCH_AT91SAM9X5
+
+comment "AT91SAM9x5 Series Board Type"
+
+config MACH_AT91SAM9X5EK
+	bool "Atmel AT91SAM9x5 Series Evaluation Kit"
+	help
+	  Select this if you re using Atmel's AT91SAM9x5-EK Evaluation Kit.
+	  Supported chips are sam9g15, sam9g25, sam9x25, sam9g35 and sam9x35.
 
 endif
 
