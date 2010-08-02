@@ -789,15 +789,15 @@ config RTC_DRV_AT32AP700X
 
 config RTC_DRV_AT91RM9200
 	tristate "AT91RM9200 or some AT91SAM9 RTC"
-	depends on ARCH_AT91RM9200 || ARCH_AT91SAM9RL || ARCH_AT91SAM9G45
+	depends on ARCH_AT91RM9200 || ARCH_AT91SAM9RL || ARCH_AT91SAM9G45 || ARCH_AT91SAM9X5
 	help
 	  Driver for the internal RTC (Realtime Clock) module found on
-	  Atmel AT91RM9200's and some  AT91SAM9 chips. On AT91SAM9 chips
+	  Atmel AT91RM9200's and some AT91SAM9 chips. On AT91SAM9 chips
 	  this is powered by the backup power supply.
 
 config RTC_DRV_AT91SAM9
 	tristate "AT91SAM9x/AT91CAP9 RTT as RTC"
-	depends on ARCH_AT91 && !(ARCH_AT91RM9200 || ARCH_AT91X40)
+	depends on ARCH_AT91 && !(ARCH_AT91RM9200 || ARCH_AT91X40 || ARCH_AT91SAM9X5)
 	help
 	  RTC driver for the Atmel AT91SAM9x and AT91CAP9 internal RTT
 	  (Real Time Timer). These timers are powered by the backup power
