@@ -90,6 +90,7 @@ config ATMEL_TCLIB
 config ATMEL_TCB_CLKSRC
 	bool "TC Block Clocksource"
 	depends on ATMEL_TCLIB
+	select ATMEL_TCB_CLKSRC_32BIT if ARCH_AT91SAM9X5
 	default y
 	help
 	  Select this to get a high precision clocksource based on a
@@ -111,6 +112,9 @@ config ATMEL_TCB_CLKSRC_BLOCK
 	  choice of which one to use for the clock framework.  The other
 	  TC can be used for other purposes, such as PWM generation and
 	  interval timing.
+
+config ATMEL_TCB_CLKSRC_32BIT
+	boolean
 
 config IBM_ASM
 	tristate "Device driver for IBM RSA service processor"
