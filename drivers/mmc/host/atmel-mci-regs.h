@@ -31,6 +31,7 @@
 # define MCI_MR_PDCFBYTE	(  1 << 13)	/* Force Byte Transfer */
 # define MCI_MR_PDCPADV		(  1 << 14)	/* Padding Value */
 # define MCI_MR_PDCMODE		(  1 << 15)	/* PDC-oriented Mode */
+# define MCI_MR_CLKODD(x)	((x) << 16)	/* LSB of clock divider */
 #define MCI_DTOR		0x0008	/* Data Timeout */
 # define MCI_DTOCYC(x)		((x) <<  0)	/* Data Timeout Cycles */
 # define MCI_DTOMUL(x)		((x) <<  4)	/* Data Timeout Multiplier */

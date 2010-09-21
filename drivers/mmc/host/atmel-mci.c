@@ -236,7 +236,7 @@ static bool mci_has_rwproof(void)
  */
 static inline bool atmci_is_mci2(void)
 {
-	if (cpu_is_at91sam9g45())
+	if (cpu_is_at91sam9g45() || cpu_is_at91sam9x5())
 		return true;
 
 	return false;
@@ -943,15 +943,28 @@ static void atmci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		}
 
 		/* Calculate clock divider */
-		clkdiv = DIV_ROUND_UP(host->bus_hz, 2 * clock_min) - 1;
-		if (clkdiv > 255) {
-			dev_warn(&mmc->class_dev,
-				"clock %u too slow; using %lu\n",
-				clock_min, host->bus_hz / (2 * 256));
-			clkdiv = 255;
-		}
+		if (!cpu_is_at91sam9x5()) {
+			clkdiv = DIV_ROUND_UP(host->bus_hz, 2 * clock_min) - 1;
+			if (clkdiv > 255) {
+				dev_warn(&mmc->class_dev,
+					"clock %u too slow; using %lu\n",
+					clock_min, host->bus_hz / (2 * 256));
+				clkdiv = 255;
+			}
 
-		host->mode_reg = MCI_MR_CLKDIV(clkdiv);
+			host->mode_reg = MCI_MR_CLKDIV(clkdiv);
+		} else {
+			clkdiv = DIV_ROUND_UP(host->bus_hz, clock_min) - 2;
+			if (clkdiv > 511) {
+				dev_warn(&mmc->class_dev,
+					"clock %u too slow; using %lu\n",
+					clock_min, host->bus_hz / (511 + 2));
+				clkdiv = 511;
+			}
+
+			host->mode_reg = MCI_MR_CLKDIV(clkdiv >> 1)
+					| MCI_MR_CLKODD(clkdiv & 1);
+		}
 
 		/*
 		 * WRPROOF and RDPROOF prevent overruns/underruns by
