@@ -32,6 +32,10 @@
 
 #include <mach/at91_rtc.h>
 
+#if defined(CONFIG_ARCH_AT91SAM9X5)
+#include <mach/at91sam9x5_rtc_workaround.h>
+#endif
+
 
 #define AT91_RTC_EPOCH		1900UL	/* just like arch/arm/common/rtctime.c */
 
