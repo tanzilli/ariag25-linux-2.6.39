@@ -47,12 +47,16 @@ struct atmel_lcdfb_info {
 	struct clk		*bus_clk;
 	struct clk		*lcdc_clk;
 
+	struct lcd_dma_desc	*p_dma_desc;
+	dma_addr_t		dma_desc_phys;
+
 #ifdef CONFIG_BACKLIGHT_ATMEL_LCDC
 	struct backlight_device	*backlight;
 	u8			bl_power;
 #endif
 	bool			lcdcon_is_backlight;
 	bool			lcdcon_pol_negative;
+	bool			alpha_enabled;
 	u8			saved_lcdcon;
 
 	u8			default_bpp;
@@ -62,6 +66,12 @@ struct atmel_lcdfb_info {
 	void (*atmel_lcdfb_power_control)(int on);
 	struct fb_monspecs	*default_monspecs;
 	u32			pseudo_palette[16];
+};
+
+struct lcd_dma_desc {
+	u32	address;
+	u32	control;
+	u32	next;
 };
 
 #define ATMEL_LCDC_DMABADDR1	0x00
@@ -214,6 +224,11 @@ struct atmel_lcdfb_info {
 #define	ATMEL_LCDC_OWRI		(1 << 5)
 #define	ATMEL_LCDC_MERI		(1 << 6)
 
+#if !defined(CONFIG_ARCH_AT91SAM9X5)
 #define ATMEL_LCDC_LUT(n)	(0x0c00 + ((n)*4))
+#else
+/* Base layer CLUT */
+#define ATMEL_LCDC_LUT(n)	(0x0400 + ((n)*4))
+#endif
 
 #endif /* __ATMEL_LCDC_H__ */

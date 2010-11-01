@@ -1,7 +1,7 @@
 /*
  *  Driver for AT91/AT32 LCD Controller
  *
- *  Copyright (C) 2007 Atmel Corporation
+ *  Copyright (C) 2007-2010 Atmel Corporation
  *
  * This file is subject to the terms and conditions of the GNU General Public
  * License.  See the file COPYING in the main directory of this archive for
@@ -24,6 +24,7 @@
 #include <mach/gpio.h>
 
 #include <video/atmel_lcdc.h>
+#include <mach/atmel_hlcdfb.h>
 
 #define lcdc_readl(sinfo, reg)		__raw_readl((sinfo)->mmio+(reg))
 #define lcdc_writel(sinfo, reg, val)	__raw_writel((val), (sinfo)->mmio+(reg))
@@ -72,6 +73,9 @@ static u32 contrast_ctr = ATMEL_LCDC_PS_DIV8
 		| ATMEL_LCDC_POL_POSITIVE
 		| ATMEL_LCDC_ENA_PWMENABLE;
 
+static const u32 contrast_pwm_ctr = LCDC_LCDCFG6_PWMPOL
+		| (ATMEL_LCDC_CVAL_DEFAULT << LCDC_LCDCFG6_PWMCVAL_OFFSET);
+
 #ifdef CONFIG_BACKLIGHT_ATMEL_LCDC
 
 /* some bl->props field just changed */
@@ -80,6 +84,7 @@ static int atmel_bl_update_status(struct backlight_device *bl)
 	struct atmel_lcdfb_info *sinfo = bl_get_data(bl);
 	int			power = sinfo->bl_power;
 	int			brightness = bl->props.brightness;
+	u32			reg;
 
 	/* REVISIT there may be a meaningful difference between
 	 * fb_blank and power ... there seem to be some cases
@@ -90,14 +95,25 @@ static int atmel_bl_update_status(struct backlight_device *bl)
 	else if (bl->props.power != sinfo->bl_power)
 		power = bl->props.power;
 
-	if (brightness < 0 && power == FB_BLANK_UNBLANK)
-		brightness = lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
-	else if (power != FB_BLANK_UNBLANK)
+	if (brightness < 0 && power == FB_BLANK_UNBLANK) {
+		if (cpu_is_at91sam9x5())
+			brightness = lcdc_readl(sinfo, ATMEL_LCDC_LCDCFG6)
+				     >> LCDC_LCDCFG6_PWMCVAL_OFFSET;
+		else
+			brightness = lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
+	} else if (power != FB_BLANK_UNBLANK) {
 		brightness = 0;
+	}
 
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_VAL, brightness);
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR,
-			brightness ? contrast_ctr : 0);
+	if (cpu_is_at91sam9x5()) {
+		reg = lcdc_readl(sinfo, ATMEL_LCDC_LCDCFG6) & ~LCDC_LCDCFG6_PWMCVAL;
+		reg |= brightness << LCDC_LCDCFG6_PWMCVAL_OFFSET;
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG6, reg);
+	} else {
+		lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_VAL, brightness);
+		lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR,
+				brightness ? contrast_ctr : 0);
+	}
 
 	bl->props.fb_blank = bl->props.power = sinfo->bl_power = power;
 
@@ -108,7 +124,10 @@ static int atmel_bl_get_brightness(struct backlight_device *bl)
 {
 	struct atmel_lcdfb_info *sinfo = bl_get_data(bl);
 
-	return lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
+	if (cpu_is_at91sam9x5())
+		return lcdc_readl(sinfo, ATMEL_LCDC_LCDCFG6) >> LCDC_LCDCFG6_PWMCVAL_OFFSET;
+	else
+		return lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
 }
 
 static const struct backlight_ops atmel_lcdc_bl_ops = {
@@ -164,14 +183,17 @@ static void exit_backlight(struct atmel_lcdfb_info *sinfo)
 
 static void init_contrast(struct atmel_lcdfb_info *sinfo)
 {
-	/* contrast pwm can be 'inverted' */
-	if (sinfo->lcdcon_pol_negative)
-			contrast_ctr &= ~(ATMEL_LCDC_POL_POSITIVE);
-
-	/* have some default contrast/backlight settings */
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR, contrast_ctr);
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_VAL, ATMEL_LCDC_CVAL_DEFAULT);
-
+	if (cpu_is_at91sam9x5()) {
+		/* have some default contrast/backlight settings */
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG6, contrast_pwm_ctr);
+	} else {
+		/* contrast pwm can be 'inverted' */
+		if (sinfo->lcdcon_pol_negative)
+				contrast_ctr &= ~(ATMEL_LCDC_POL_POSITIVE);
+		/* have some default contrast/backlight settings */
+		lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR, contrast_ctr);
+		lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_VAL, ATMEL_LCDC_CVAL_DEFAULT);
+	}
 	if (sinfo->lcdcon_is_backlight)
 		init_backlight(sinfo);
 }
@@ -213,32 +235,78 @@ static unsigned long compute_hozval(unsigned long xres, unsigned long lcdcon2)
 
 static void atmel_lcdfb_stop_nowait(struct atmel_lcdfb_info *sinfo)
 {
-	/* Turn off the LCD controller and the DMA controller */
-	lcdc_writel(sinfo, ATMEL_LCDC_PWRCON,
-			sinfo->guard_time << ATMEL_LCDC_GUARDT_OFFSET);
+	if (cpu_is_at91sam9x5()) {
+		/* Disable DISP signal */
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDDIS, LCDC_LCDDIS_DISPDIS);
+		while ((lcdc_readl(sinfo, ATMEL_LCDC_LCDSR) & LCDC_LCDSR_DISPSTS))
+			msleep(1);
+		/* Disable synchronization */
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDDIS, LCDC_LCDDIS_SYNCDIS);
+		while ((lcdc_readl(sinfo, ATMEL_LCDC_LCDSR) & LCDC_LCDSR_LCDSTS))
+			msleep(1);
+		/* Disable pixel clock */
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDDIS, LCDC_LCDDIS_CLKDIS);
+		while ((lcdc_readl(sinfo, ATMEL_LCDC_LCDSR) & LCDC_LCDSR_CLKSTS))
+			msleep(1);
+		/* Disable PWM */
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDDIS, LCDC_LCDDIS_PWMDIS);
+		while ((lcdc_readl(sinfo, ATMEL_LCDC_LCDSR) & LCDC_LCDSR_PWMSTS))
+			msleep(1);
+	} else {
+		/* Turn off the LCD controller and the DMA controller */
+		lcdc_writel(sinfo, ATMEL_LCDC_PWRCON,
+				sinfo->guard_time << ATMEL_LCDC_GUARDT_OFFSET);
 
-	/* Wait for the LCDC core to become idle */
-	while (lcdc_readl(sinfo, ATMEL_LCDC_PWRCON) & ATMEL_LCDC_BUSY)
-		msleep(10);
+		/* Wait for the LCDC core to become idle */
+		while (lcdc_readl(sinfo, ATMEL_LCDC_PWRCON) & ATMEL_LCDC_BUSY)
+			msleep(10);
 
-	lcdc_writel(sinfo, ATMEL_LCDC_DMACON, 0);
+		lcdc_writel(sinfo, ATMEL_LCDC_DMACON, 0);
+	}
 }
 
 static void atmel_lcdfb_stop(struct atmel_lcdfb_info *sinfo)
 {
 	atmel_lcdfb_stop_nowait(sinfo);
 
-	/* Wait for DMA engine to become idle... */
-	while (lcdc_readl(sinfo, ATMEL_LCDC_DMACON) & ATMEL_LCDC_DMABUSY)
-		msleep(10);
+	if (cpu_is_at91sam9x5()) {
+		/* Wait for the end of DMA transfer */
+		while (!(lcdc_readl(sinfo, ATMEL_LCDC_BASEISR) & LCDC_BASEISR_DMA))
+			msleep(10);
+	} else {
+		/* Wait for DMA engine to become idle... */
+		while (lcdc_readl(sinfo, ATMEL_LCDC_DMACON) & ATMEL_LCDC_DMABUSY)
+			msleep(10);
+	}
 }
 
 static void atmel_lcdfb_start(struct atmel_lcdfb_info *sinfo)
 {
-	lcdc_writel(sinfo, ATMEL_LCDC_DMACON, sinfo->default_dmacon);
-	lcdc_writel(sinfo, ATMEL_LCDC_PWRCON,
-		(sinfo->guard_time << ATMEL_LCDC_GUARDT_OFFSET)
-		| ATMEL_LCDC_PWR);
+	u32	value;
+
+	if (cpu_is_at91sam9x5()) {
+		value = lcdc_readl(sinfo, ATMEL_LCDC_LCDEN);
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDEN, value | LCDC_LCDEN_CLKEN);
+		while (!(lcdc_readl(sinfo, ATMEL_LCDC_LCDSR) & LCDC_LCDSR_CLKSTS))
+			msleep(1);
+		value = lcdc_readl(sinfo, ATMEL_LCDC_LCDEN);
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDEN, value | LCDC_LCDEN_SYNCEN);
+		while (!(lcdc_readl(sinfo, ATMEL_LCDC_LCDSR) & LCDC_LCDSR_LCDSTS))
+			msleep(1);
+		value = lcdc_readl(sinfo, ATMEL_LCDC_LCDEN);
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDEN, value | LCDC_LCDEN_DISPEN);
+		while (!(lcdc_readl(sinfo, ATMEL_LCDC_LCDSR) & LCDC_LCDSR_DISPSTS))
+			msleep(1);
+		value = lcdc_readl(sinfo, ATMEL_LCDC_LCDEN);
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDEN, value | LCDC_LCDEN_PWMEN);
+		while (!(lcdc_readl(sinfo, ATMEL_LCDC_LCDSR) & LCDC_LCDSR_PWMSTS))
+			msleep(1);
+	} else {
+		lcdc_writel(sinfo, ATMEL_LCDC_DMACON, sinfo->default_dmacon);
+		lcdc_writel(sinfo, ATMEL_LCDC_PWRCON,
+			(sinfo->guard_time << ATMEL_LCDC_GUARDT_OFFSET)
+			| ATMEL_LCDC_PWR);
+	}
 }
 
 static void atmel_lcdfb_update_dma(struct fb_info *info,
@@ -247,14 +315,31 @@ static void atmel_lcdfb_update_dma(struct fb_info *info,
 	struct atmel_lcdfb_info *sinfo = info->par;
 	struct fb_fix_screeninfo *fix = &info->fix;
 	unsigned long dma_addr;
+	struct lcd_dma_desc *desc;
 
 	dma_addr = (fix->smem_start + var->yoffset * fix->line_length
 		    + var->xoffset * var->bits_per_pixel / 8);
 
 	dma_addr &= ~3UL;
 
-	/* Set framebuffer DMA base address and pixel offset */
-	lcdc_writel(sinfo, ATMEL_LCDC_DMABADDR1, dma_addr);
+	if (cpu_is_at91sam9x5()) {
+		/* Setup the DMA descriptor, this descriptor will loop to itself */
+		desc = (struct lcd_dma_desc *)sinfo->p_dma_desc;
+
+		desc->address = dma_addr;
+		/* Disable DMA transfer interrupt & descriptor loaded interrupt. */
+		desc->control = LCDC_BASECTRL_ADDIEN | LCDC_BASECTRL_DSCRIEN
+				| LCDC_BASECTRL_DMAIEN | LCDC_BASECTRL_DFETCH;
+		desc->next = sinfo->dma_desc_phys;
+
+		lcdc_writel(sinfo, ATMEL_LCDC_BASEADDR, dma_addr);
+		lcdc_writel(sinfo, ATMEL_LCDC_BASECTRL, desc->control);
+		lcdc_writel(sinfo, ATMEL_LCDC_BASENEXT, sinfo->dma_desc_phys);
+		lcdc_writel(sinfo, ATMEL_LCDC_BASECHER, LCDC_BASECHER_CHEN | LCDC_BASECHER_UPDATEEN);
+	} else {
+		/* Set framebuffer DMA base address and pixel offset */
+		lcdc_writel(sinfo, ATMEL_LCDC_DMABADDR1, dma_addr);
+	}
 
 	atmel_lcdfb_update_dma2d(sinfo, var);
 }
@@ -265,12 +350,18 @@ static inline void atmel_lcdfb_free_video_memory(struct atmel_lcdfb_info *sinfo)
 
 	dma_free_writecombine(info->device, info->fix.smem_len,
 				info->screen_base, info->fix.smem_start);
+
+	if (cpu_is_at91sam9x5()) {
+		if (sinfo->p_dma_desc)
+			dma_free_writecombine(info->device, sizeof(struct lcd_dma_desc),
+						sinfo->p_dma_desc, sinfo->dma_desc_phys);
+	}
 }
 
 /**
  *	atmel_lcdfb_alloc_video_memory - Allocate framebuffer memory
  *	@sinfo: the frame buffer to allocate memory for
- * 	
+ *
  * 	This function is called only from the atmel_lcdfb_probe()
  * 	so no locking by fb_info->mm_lock around smem_len setting is needed.
  */
@@ -292,6 +383,19 @@ static int atmel_lcdfb_alloc_video_memory(struct atmel_lcdfb_info *sinfo)
 	}
 
 	memset(info->screen_base, 0, info->fix.smem_len);
+
+	if (cpu_is_at91sam9x5()) {
+		sinfo->p_dma_desc = dma_alloc_writecombine(info->device,
+						sizeof(struct lcd_dma_desc),
+						(dma_addr_t *)&(sinfo->dma_desc_phys),
+						GFP_KERNEL);
+
+		if (!sinfo->p_dma_desc) {
+			dma_free_writecombine(info->device, info->fix.smem_len,
+						info->screen_base, info->fix.smem_start);
+			return -ENOMEM;
+		}
+	}
 
 	return 0;
 }
@@ -386,18 +490,33 @@ static int atmel_lcdfb_check_var(struct fb_var_screeninfo *var,
 	}
 
 	/* Saturate vertical and horizontal timings at maximum values */
-	var->vsync_len = min_t(u32, var->vsync_len,
-			(ATMEL_LCDC_VPW >> ATMEL_LCDC_VPW_OFFSET) + 1);
-	var->upper_margin = min_t(u32, var->upper_margin,
-			ATMEL_LCDC_VBP >> ATMEL_LCDC_VBP_OFFSET);
-	var->lower_margin = min_t(u32, var->lower_margin,
-			ATMEL_LCDC_VFP);
-	var->right_margin = min_t(u32, var->right_margin,
-			(ATMEL_LCDC_HFP >> ATMEL_LCDC_HFP_OFFSET) + 1);
-	var->hsync_len = min_t(u32, var->hsync_len,
-			(ATMEL_LCDC_HPW >> ATMEL_LCDC_HPW_OFFSET) + 1);
-	var->left_margin = min_t(u32, var->left_margin,
-			ATMEL_LCDC_HBP + 1);
+	if (cpu_is_at91sam9x5()) {
+		var->vsync_len = min_t(u32, var->vsync_len,
+				(LCDC_LCDCFG1_VSPW >> LCDC_LCDCFG1_VSPW_OFFSET) + 1);
+		var->upper_margin = min_t(u32, var->upper_margin,
+				(LCDC_LCDCFG2_VFPW >> LCDC_LCDCFG2_VFPW_OFFSET) + 1);
+		var->lower_margin = min_t(u32, var->lower_margin,
+				LCDC_LCDCFG2_VBPW >> LCDC_LCDCFG2_VBPW_OFFSET);
+		var->right_margin = min_t(u32, var->right_margin,
+				(LCDC_LCDCFG3_HBPW >> LCDC_LCDCFG3_HBPW_OFFSET) + 1);
+		var->hsync_len = min_t(u32, var->hsync_len,
+				(LCDC_LCDCFG1_HSPW >> LCDC_LCDCFG1_HSPW_OFFSET) + 1);
+		var->left_margin = min_t(u32, var->left_margin,
+				(LCDC_LCDCFG3_HFPW >> LCDC_LCDCFG3_HFPW_OFFSET) + 1);
+	} else {
+		var->vsync_len = min_t(u32, var->vsync_len,
+				(ATMEL_LCDC_VPW >> ATMEL_LCDC_VPW_OFFSET) + 1);
+		var->upper_margin = min_t(u32, var->upper_margin,
+				ATMEL_LCDC_VBP >> ATMEL_LCDC_VBP_OFFSET);
+		var->lower_margin = min_t(u32, var->lower_margin,
+				ATMEL_LCDC_VFP);
+		var->right_margin = min_t(u32, var->right_margin,
+				(ATMEL_LCDC_HFP >> ATMEL_LCDC_HFP_OFFSET) + 1);
+		var->hsync_len = min_t(u32, var->hsync_len,
+				(ATMEL_LCDC_HPW >> ATMEL_LCDC_HPW_OFFSET) + 1);
+		var->left_margin = min_t(u32, var->left_margin,
+				ATMEL_LCDC_HBP + 1);
+	}
 
 	/* Some parameters can't be zero */
 	var->vsync_len = max_t(u32, var->vsync_len, 1);
@@ -412,10 +531,53 @@ static int atmel_lcdfb_check_var(struct fb_var_screeninfo *var,
 	case 8:
 		var->red.offset = var->green.offset = var->blue.offset = 0;
 		var->red.length = var->green.length = var->blue.length
-			= var->bits_per_pixel;
+				= var->bits_per_pixel;
+		break;
+	case 12:
+		if (cpu_is_at91sam9x5()) {
+			/* RGB:444 mode */
+			var->red.offset = 8;
+			var->blue.offset = 0;
+			var->green.offset = 4;
+			var->red.length = var->green.length = var->blue.length = 4;
+		} else {
+			/*TODO: rework*/
+			BUG();
+		}
 		break;
 	case 15:
+		if (cpu_is_at91sam9x5()) {
+			/* RGB:555 mode */
+			var->red.offset = 10;
+			var->blue.offset = 0;
+			var->green.length = 5;
+			var->red.length = var->green.length = var->blue.length = 5;
+		} else {
+			/*TODO: rework*/
+			BUG();
+		}
+		break;
 	case 16:
+		if (cpu_is_at91sam9x5()) {
+			if (sinfo->alpha_enabled) {
+				/* ARGB:4444 mode */
+				var->red.offset = 8;
+				var->blue.offset = 0;
+				var->green.offset = 4;
+				var->transp.offset = 12;
+				var->red.length = var->green.length
+						= var->blue.length
+						= var->transp.length = 4;
+			} else {
+				/* RGB:565 mode */
+				var->red.offset = 11;
+				var->blue.offset = 0;
+				var->green.offset = 5;
+				var->green.length = 6;
+				var->red.length = var->blue.length = 5;
+			}
+			break;
+		}
 		if (sinfo->lcd_wiring_mode == ATMEL_LCDC_WIRING_RGB) {
 			/* RGB:565 mode */
 			var->red.offset = 11;
@@ -435,6 +597,7 @@ static int atmel_lcdfb_check_var(struct fb_var_screeninfo *var,
 		var->red.length = var->blue.length = 5;
 		break;
 	case 32:
+		/* TODO 32 & 24 modes */
 		var->transp.offset = 24;
 		var->transp.length = 8;
 		/* fall through */
@@ -471,6 +634,252 @@ static void atmel_lcdfb_reset(struct atmel_lcdfb_info *sinfo)
 	atmel_lcdfb_start(sinfo);
 }
 
+static int atmel_lcdfb_setup_9x5_core(struct fb_info *info)
+{
+	struct atmel_lcdfb_info *sinfo = info->par;
+	unsigned long value;
+	unsigned long clk_value_khz;
+
+	dev_dbg(info->device, "%s:\n", __func__);
+	/* Set pixel clock */
+	clk_value_khz = clk_get_rate(sinfo->lcdc_clk) / 1000;
+
+	value = DIV_ROUND_UP(clk_value_khz, PICOS2KHZ(info->var.pixclock));
+
+	if (value < 1) {
+		dev_notice(info->device, "using system clock as pixel clock\n");
+		value = LCDC_LCDCFG0_CLKPOL | LCDC_LCDCFG0_CLKPWMSEL | LCDC_LCDCFG0_CGDISBASE;
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG0, value);
+	} else {
+		info->var.pixclock = KHZ2PICOS(clk_value_khz / value);
+		dev_dbg(info->device, "  updated pixclk:     %lu KHz\n",
+				PICOS2KHZ(info->var.pixclock));
+		value = value - 2;
+		dev_dbg(info->device, "  * programming CLKDIV = 0x%08lx\n",
+					value);
+		value = (value << LCDC_LCDCFG0_CLKDIV_OFFSET)
+			| LCDC_LCDCFG0_CLKPOL
+			| LCDC_LCDCFG0_CGDISBASE;
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG0, value);
+	}
+
+	/* Initialize control register 5 */
+	value = (sinfo->guard_time << LCDC_LCDCFG5_GUARDTIME_OFFSET)
+		| LCDC_LCDCFG5_DISPDLY
+		| LCDC_LCDCFG5_VSPDLYS;
+
+	if (!(info->var.sync & FB_SYNC_HOR_HIGH_ACT))
+		value |= LCDC_LCDCFG5_HSPOL;
+	if (!(info->var.sync & FB_SYNC_VERT_HIGH_ACT))
+		value |= LCDC_LCDCFG5_VSPOL;
+
+	switch (info->var.bits_per_pixel) {
+	case 12:
+		value |= LCDC_LCDCFG5_MODE_OUTPUT_12BPP;
+		break;
+	case 16:
+		if (info->var.transp.offset != 0)
+			value |= LCDC_LCDCFG5_MODE_OUTPUT_12BPP;
+		else
+			value |= LCDC_LCDCFG5_MODE_OUTPUT_16BPP;
+		break;
+	case 18:
+		value |= LCDC_LCDCFG5_MODE_OUTPUT_18BPP;
+		break;
+	case 24:
+	case 32:
+		value |= LCDC_LCDCFG5_MODE_OUTPUT_24BPP;
+		break;
+	default:
+		BUG();
+		break;
+	}
+	dev_dbg(info->device, "  * LCDC_LCDCFG5 = %08lx\n", value);
+	lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG5, value);
+
+	/* Vertical & Horizontal Timing */
+	value = (info->var.vsync_len - 1) << LCDC_LCDCFG1_VSPW_OFFSET;
+	value |= (info->var.hsync_len - 1) << LCDC_LCDCFG1_HSPW_OFFSET;
+	dev_dbg(info->device, "  * LCDC_LCDCFG1 = %08lx\n", value);
+	lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG1, value);
+
+	value = (info->var.lower_margin) << LCDC_LCDCFG2_VBPW_OFFSET;
+	value |= (info->var.upper_margin - 1) << LCDC_LCDCFG2_VFPW_OFFSET;
+	dev_dbg(info->device, "  * LCDC_LCDCFG2 = %08lx\n", value);
+	lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG2, value);
+
+	value = (info->var.right_margin - 1) << LCDC_LCDCFG3_HBPW_OFFSET;
+	value |= (info->var.left_margin - 1) << LCDC_LCDCFG3_HFPW_OFFSET;
+	dev_dbg(info->device, "  * LCDC_LCDCFG3 = %08lx\n", value);
+	lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG3, value);
+
+	/* Display size */
+	value = (info->var.yres - 1) << LCDC_LCDCFG4_RPF_OFFSET;
+	value |= (info->var.xres - 1) << LCDC_LCDCFG4_PPL_OFFSET;
+	dev_dbg(info->device, "  * LCDC_LCDCFG4 = %08lx\n", value);
+	lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG4, value);
+
+	lcdc_writel(sinfo, ATMEL_LCDC_BASECFG0, LCDC_BASECFG0_BLEN_AHB_INCR4 | LCDC_BASECFG0_DLBO);
+	switch (info->var.bits_per_pixel) {
+	case 12:
+		value = LCDC_BASECFG1_RGBMODE_12BPP_RGB_444;
+		break;
+	case 16:
+		if (info->var.transp.offset != 0)
+			value = LCDC_BASECFG1_RGBMODE_16BPP_ARGB_4444;
+		else
+			value = LCDC_BASECFG1_RGBMODE_16BPP_RGB_565;
+		break;
+	case 18:
+		value = LCDC_BASECFG1_RGBMODE_18BPP_RGB_666_PACKED;
+		break;
+	case 24:
+		value = LCDC_BASECFG1_RGBMODE_24BPP_RGB_888_PACKED;
+		break;
+	case 32:
+		value = LCDC_BASECFG1_RGBMODE_32BPP_ARGB_8888;
+		break;
+	default:
+		BUG();
+		break;
+	}
+	lcdc_writel(sinfo, ATMEL_LCDC_BASECFG1, value);
+	lcdc_writel(sinfo, ATMEL_LCDC_BASECFG2, 0);
+	lcdc_writel(sinfo, ATMEL_LCDC_BASECFG3, 0);	/* Default color */
+	lcdc_writel(sinfo, ATMEL_LCDC_BASECFG4, LCDC_BASECFG4_DMA);
+
+	/* Disable all interrupts */
+	lcdc_writel(sinfo, ATMEL_LCDC_LCDIDR, ~0UL);
+	lcdc_writel(sinfo, ATMEL_LCDC_BASEIDR, ~0UL);
+	/* Enable BASE LAYER overflow interrupts, if want to enable DMA interrupt, also need set it at LCDC_BASECTRL reg */
+	lcdc_writel(sinfo, ATMEL_LCDC_BASEIER, LCDC_BASEIER_OVR);
+	lcdc_writel(sinfo, ATMEL_LCDC_LCDIER, LCDC_LCDIER_FIFOERRIE | LCDC_LCDIER_BASEIE);
+
+	return 0;
+}
+
+static int atmel_lcdfb_setup_core(struct fb_info *info)
+{
+	struct atmel_lcdfb_info *sinfo = info->par;
+	unsigned long hozval_linesz;
+	unsigned long value;
+	unsigned long clk_value_khz;
+	unsigned long pix_factor = 2;
+
+	if (cpu_is_at91sam9x5()) {
+		return atmel_lcdfb_setup_9x5_core(info);
+	} else {
+		/* ...set frame size and burst length = 8 words (?) */
+		value = (info->var.yres * info->var.xres * info->var.bits_per_pixel) / 32;
+		value |= ((ATMEL_LCDC_DMA_BURST_LEN - 1) << ATMEL_LCDC_BLENGTH_OFFSET);
+		lcdc_writel(sinfo, ATMEL_LCDC_DMAFRMCFG, value);
+
+		/* Set pixel clock */
+		if (cpu_is_at91sam9g45() && !cpu_is_at91sam9g45es())
+			pix_factor = 1;
+
+		clk_value_khz = clk_get_rate(sinfo->lcdc_clk) / 1000;
+
+		value = DIV_ROUND_UP(clk_value_khz, PICOS2KHZ(info->var.pixclock));
+
+		if (value < pix_factor) {
+			dev_notice(info->device, "Bypassing pixel clock divider\n");
+			lcdc_writel(sinfo, ATMEL_LCDC_LCDCON1, ATMEL_LCDC_BYPASS);
+		} else {
+			value = (value / pix_factor) - 1;
+			dev_dbg(info->device, "  * programming CLKVAL = 0x%08lx\n",
+					value);
+			lcdc_writel(sinfo, ATMEL_LCDC_LCDCON1,
+					value << ATMEL_LCDC_CLKVAL_OFFSET);
+			info->var.pixclock =
+				KHZ2PICOS(clk_value_khz / (pix_factor * (value + 1)));
+			dev_dbg(info->device, "  updated pixclk:     %lu KHz\n",
+						PICOS2KHZ(info->var.pixclock));
+		}
+
+
+		/* Initialize control register 2 */
+		value = sinfo->default_lcdcon2;
+
+		if (!(info->var.sync & FB_SYNC_HOR_HIGH_ACT))
+			value |= ATMEL_LCDC_INVLINE_INVERTED;
+		if (!(info->var.sync & FB_SYNC_VERT_HIGH_ACT))
+			value |= ATMEL_LCDC_INVFRAME_INVERTED;
+
+		switch (info->var.bits_per_pixel) {
+		case 1:
+			value |= ATMEL_LCDC_PIXELSIZE_1;
+			break;
+		case 2:
+			value |= ATMEL_LCDC_PIXELSIZE_2;
+			break;
+		case 4:
+			value |= ATMEL_LCDC_PIXELSIZE_4;
+			break;
+		case 8:
+			value |= ATMEL_LCDC_PIXELSIZE_8;
+			break;
+		case 15: /* fall through */
+		case 16:
+			value |= ATMEL_LCDC_PIXELSIZE_16;
+			break;
+		case 24:
+			value |= ATMEL_LCDC_PIXELSIZE_24;
+			break;
+		case 32:
+			value |= ATMEL_LCDC_PIXELSIZE_32;
+			break;
+		default:
+			BUG();
+			break;
+		}
+		dev_dbg(info->device, "  * LCDCON2 = %08lx\n", value);
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDCON2, value);
+
+		/* Vertical timing */
+		value = (info->var.vsync_len - 1) << ATMEL_LCDC_VPW_OFFSET;
+		value |= info->var.upper_margin << ATMEL_LCDC_VBP_OFFSET;
+		value |= info->var.lower_margin;
+		dev_dbg(info->device, "  * LCDTIM1 = %08lx\n", value);
+		lcdc_writel(sinfo, ATMEL_LCDC_TIM1, value);
+
+		/* Horizontal timing */
+		value = (info->var.right_margin - 1) << ATMEL_LCDC_HFP_OFFSET;
+		value |= (info->var.hsync_len - 1) << ATMEL_LCDC_HPW_OFFSET;
+		value |= (info->var.left_margin - 1);
+		dev_dbg(info->device, "  * LCDTIM2 = %08lx\n", value);
+		lcdc_writel(sinfo, ATMEL_LCDC_TIM2, value);
+
+		/* Horizontal value (aka line size) */
+		hozval_linesz = compute_hozval(info->var.xres,
+					lcdc_readl(sinfo, ATMEL_LCDC_LCDCON2));
+
+		/* Display size */
+		value = (hozval_linesz - 1) << ATMEL_LCDC_HOZVAL_OFFSET;
+		value |= info->var.yres - 1;
+		dev_dbg(info->device, "  * LCDFRMCFG = %08lx\n", value);
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDFRMCFG, value);
+
+		/* FIFO Threshold: Use formula from data sheet */
+		value = ATMEL_LCDC_FIFO_SIZE - (2 * ATMEL_LCDC_DMA_BURST_LEN + 3);
+		lcdc_writel(sinfo, ATMEL_LCDC_FIFO, value);
+
+		/* Toggle LCD_MODE every frame */
+		lcdc_writel(sinfo, ATMEL_LCDC_MVAL, 0);
+
+		/* Disable all interrupts */
+		lcdc_writel(sinfo, ATMEL_LCDC_IDR, ~0UL);
+		/* Enable FIFO & DMA errors */
+		lcdc_writel(sinfo, ATMEL_LCDC_IER, ATMEL_LCDC_UFLWI | ATMEL_LCDC_OWRI | ATMEL_LCDC_MERI);
+
+		/* ...wait for DMA engine to become idle... */
+		while (lcdc_readl(sinfo, ATMEL_LCDC_DMACON) & ATMEL_LCDC_DMABUSY)
+			msleep(10);
+
+		return 0;
+	}
+}
+
 /**
  *      atmel_lcdfb_set_par - Alters the hardware state.
  *      @info: frame buffer structure that represents a single frame buffer
@@ -488,11 +897,7 @@ static void atmel_lcdfb_reset(struct atmel_lcdfb_info *sinfo)
 static int atmel_lcdfb_set_par(struct fb_info *info)
 {
 	struct atmel_lcdfb_info *sinfo = info->par;
-	unsigned long hozval_linesz;
-	unsigned long value;
-	unsigned long clk_value_khz;
 	unsigned long bits_per_line;
-	unsigned long pix_factor = 2;
 
 	might_sleep();
 
@@ -517,98 +922,8 @@ static int atmel_lcdfb_set_par(struct fb_info *info)
 	dev_dbg(info->device, "  * update DMA engine\n");
 	atmel_lcdfb_update_dma(info, &info->var);
 
-	/* ...set frame size and burst length = 8 words (?) */
-	value = (info->var.yres * info->var.xres * info->var.bits_per_pixel) / 32;
-	value |= ((ATMEL_LCDC_DMA_BURST_LEN - 1) << ATMEL_LCDC_BLENGTH_OFFSET);
-	lcdc_writel(sinfo, ATMEL_LCDC_DMAFRMCFG, value);
-
 	/* Now, the LCDC core... */
-
-	/* Set pixel clock */
-	if (cpu_is_at91sam9g45() && !cpu_is_at91sam9g45es())
-		pix_factor = 1;
-
-	clk_value_khz = clk_get_rate(sinfo->lcdc_clk) / 1000;
-
-	value = DIV_ROUND_UP(clk_value_khz, PICOS2KHZ(info->var.pixclock));
-
-	if (value < pix_factor) {
-		dev_notice(info->device, "Bypassing pixel clock divider\n");
-		lcdc_writel(sinfo, ATMEL_LCDC_LCDCON1, ATMEL_LCDC_BYPASS);
-	} else {
-		value = (value / pix_factor) - 1;
-		dev_dbg(info->device, "  * programming CLKVAL = 0x%08lx\n",
-				value);
-		lcdc_writel(sinfo, ATMEL_LCDC_LCDCON1,
-				value << ATMEL_LCDC_CLKVAL_OFFSET);
-		info->var.pixclock =
-			KHZ2PICOS(clk_value_khz / (pix_factor * (value + 1)));
-		dev_dbg(info->device, "  updated pixclk:     %lu KHz\n",
-					PICOS2KHZ(info->var.pixclock));
-	}
-
-
-	/* Initialize control register 2 */
-	value = sinfo->default_lcdcon2;
-
-	if (!(info->var.sync & FB_SYNC_HOR_HIGH_ACT))
-		value |= ATMEL_LCDC_INVLINE_INVERTED;
-	if (!(info->var.sync & FB_SYNC_VERT_HIGH_ACT))
-		value |= ATMEL_LCDC_INVFRAME_INVERTED;
-
-	switch (info->var.bits_per_pixel) {
-		case 1:	value |= ATMEL_LCDC_PIXELSIZE_1; break;
-		case 2: value |= ATMEL_LCDC_PIXELSIZE_2; break;
-		case 4: value |= ATMEL_LCDC_PIXELSIZE_4; break;
-		case 8: value |= ATMEL_LCDC_PIXELSIZE_8; break;
-		case 15: /* fall through */
-		case 16: value |= ATMEL_LCDC_PIXELSIZE_16; break;
-		case 24: value |= ATMEL_LCDC_PIXELSIZE_24; break;
-		case 32: value |= ATMEL_LCDC_PIXELSIZE_32; break;
-		default: BUG(); break;
-	}
-	dev_dbg(info->device, "  * LCDCON2 = %08lx\n", value);
-	lcdc_writel(sinfo, ATMEL_LCDC_LCDCON2, value);
-
-	/* Vertical timing */
-	value = (info->var.vsync_len - 1) << ATMEL_LCDC_VPW_OFFSET;
-	value |= info->var.upper_margin << ATMEL_LCDC_VBP_OFFSET;
-	value |= info->var.lower_margin;
-	dev_dbg(info->device, "  * LCDTIM1 = %08lx\n", value);
-	lcdc_writel(sinfo, ATMEL_LCDC_TIM1, value);
-
-	/* Horizontal timing */
-	value = (info->var.right_margin - 1) << ATMEL_LCDC_HFP_OFFSET;
-	value |= (info->var.hsync_len - 1) << ATMEL_LCDC_HPW_OFFSET;
-	value |= (info->var.left_margin - 1);
-	dev_dbg(info->device, "  * LCDTIM2 = %08lx\n", value);
-	lcdc_writel(sinfo, ATMEL_LCDC_TIM2, value);
-
-	/* Horizontal value (aka line size) */
-	hozval_linesz = compute_hozval(info->var.xres,
-					lcdc_readl(sinfo, ATMEL_LCDC_LCDCON2));
-
-	/* Display size */
-	value = (hozval_linesz - 1) << ATMEL_LCDC_HOZVAL_OFFSET;
-	value |= info->var.yres - 1;
-	dev_dbg(info->device, "  * LCDFRMCFG = %08lx\n", value);
-	lcdc_writel(sinfo, ATMEL_LCDC_LCDFRMCFG, value);
-
-	/* FIFO Threshold: Use formula from data sheet */
-	value = ATMEL_LCDC_FIFO_SIZE - (2 * ATMEL_LCDC_DMA_BURST_LEN + 3);
-	lcdc_writel(sinfo, ATMEL_LCDC_FIFO, value);
-
-	/* Toggle LCD_MODE every frame */
-	lcdc_writel(sinfo, ATMEL_LCDC_MVAL, 0);
-
-	/* Disable all interrupts */
-	lcdc_writel(sinfo, ATMEL_LCDC_IDR, ~0UL);
-	/* Enable FIFO & DMA errors */
-	lcdc_writel(sinfo, ATMEL_LCDC_IER, ATMEL_LCDC_UFLWI | ATMEL_LCDC_OWRI | ATMEL_LCDC_MERI);
-
-	/* ...wait for DMA engine to become idle... */
-	while (lcdc_readl(sinfo, ATMEL_LCDC_DMACON) & ATMEL_LCDC_DMABUSY)
-		msleep(10);
+	atmel_lcdfb_setup_core(info);
 
 	atmel_lcdfb_start(sinfo);
 
@@ -755,14 +1070,32 @@ static irqreturn_t atmel_lcdfb_interrupt(int irq, void *dev_id)
 	struct fb_info *info = dev_id;
 	struct atmel_lcdfb_info *sinfo = info->par;
 	u32 status;
+	u32 baselayer_status;
 
-	status = lcdc_readl(sinfo, ATMEL_LCDC_ISR);
-	if (status & ATMEL_LCDC_UFLWI) {
-		dev_warn(info->device, "FIFO underflow %#x\n", status);
-		/* reset DMA and FIFO to avoid screen shifting */
-		schedule_work(&sinfo->task);
+	if (cpu_is_at91sam9x5()) {
+		/* Check for error status via interrupt.*/
+		status = lcdc_readl(sinfo, ATMEL_LCDC_LCDISR);
+		if (status & LCDC_LCDISR_FIFOERR) {
+			dev_warn(info->device, "FIFO underflow %#x\n", status);
+		} else if (status & LCDC_LCDISR_BASE) {
+			/* Check base layer's overflow error. */
+			baselayer_status = lcdc_readl(sinfo, ATMEL_LCDC_BASEISR);
+
+			if (baselayer_status & LCDC_BASEISR_OVR)
+				dev_warn(info->device, "base layer overflow %#x\n",
+							baselayer_status);
+
+		}
+	} else {
+		status = lcdc_readl(sinfo, ATMEL_LCDC_ISR);
+		if (status & ATMEL_LCDC_UFLWI) {
+			dev_warn(info->device, "FIFO underflow %#x\n", status);
+			/* reset DMA and FIFO to avoid screen shifting */
+			schedule_work(&sinfo->task);
+		}
+		lcdc_writel(sinfo, ATMEL_LCDC_ICR, status);
 	}
-	lcdc_writel(sinfo, ATMEL_LCDC_ICR, status);
+
 	return IRQ_HANDLED;
 }
 
@@ -903,6 +1236,8 @@ static int __init atmel_lcdfb_probe(struct platform_device *pdev)
 
 	/* Initialize video memory */
 	map = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	sinfo->p_dma_desc = NULL;
+	sinfo->dma_desc_phys = 0;
 	if (map) {
 		/* use a pre-allocated memory buffer */
 		info->fix.smem_start = map->start;
@@ -1013,7 +1348,7 @@ unmap_mmio:
 	exit_backlight(sinfo);
 	iounmap(sinfo->mmio);
 release_mem:
- 	release_mem_region(info->fix.mmio_start, info->fix.mmio_len);
+	release_mem_region(info->fix.mmio_start, info->fix.mmio_len);
 free_fb:
 	if (map)
 		iounmap(info->screen_base);
@@ -1058,7 +1393,7 @@ static int __exit atmel_lcdfb_remove(struct platform_device *pdev)
 	fb_dealloc_cmap(&info->cmap);
 	free_irq(sinfo->irq_base, info);
 	iounmap(sinfo->mmio);
- 	release_mem_region(info->fix.mmio_start, info->fix.mmio_len);
+	release_mem_region(info->fix.mmio_start, info->fix.mmio_len);
 	if (platform_get_resource(pdev, IORESOURCE_MEM, 1)) {
 		iounmap(info->screen_base);
 		release_mem_region(info->fix.smem_start, info->fix.smem_len);
@@ -1083,10 +1418,17 @@ static int atmel_lcdfb_suspend(struct platform_device *pdev, pm_message_t mesg)
 	 * We don't want to handle interrupts while the clock is
 	 * stopped. It may take forever.
 	 */
-	lcdc_writel(sinfo, ATMEL_LCDC_IDR, ~0UL);
+	if (cpu_is_at91sam9x5()) {
+		/* Disable all interrupts */
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDIDR, ~0UL);
+		lcdc_writel(sinfo, ATMEL_LCDC_BASEIDR, ~0UL);
+	} else {
+		lcdc_writel(sinfo, ATMEL_LCDC_IDR, ~0UL);
 
-	sinfo->saved_lcdcon = lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR, 0);
+		sinfo->saved_lcdcon = lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
+		lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR, 0);
+	}
+
 	if (sinfo->atmel_lcdfb_power_control)
 		sinfo->atmel_lcdfb_power_control(0);
 
@@ -1105,11 +1447,18 @@ static int atmel_lcdfb_resume(struct platform_device *pdev)
 	atmel_lcdfb_start(sinfo);
 	if (sinfo->atmel_lcdfb_power_control)
 		sinfo->atmel_lcdfb_power_control(1);
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR, sinfo->saved_lcdcon);
 
-	/* Enable FIFO & DMA errors */
-	lcdc_writel(sinfo, ATMEL_LCDC_IER, ATMEL_LCDC_UFLWI
-			| ATMEL_LCDC_OWRI | ATMEL_LCDC_MERI);
+	if (cpu_is_at91sam9x5()) {
+		/* Enable fifo error & BASE LAYER overflow interrupts */
+		lcdc_writel(sinfo, ATMEL_LCDC_BASEIER, LCDC_BASEIER_OVR);
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDIER, LCDC_LCDIER_FIFOERRIE | LCDC_LCDIER_BASEIE);
+	} else {
+		lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR, sinfo->saved_lcdcon);
+
+		/* Enable FIFO & DMA errors */
+		lcdc_writel(sinfo, ATMEL_LCDC_IER, ATMEL_LCDC_UFLWI
+				| ATMEL_LCDC_OWRI | ATMEL_LCDC_MERI);
+	}
 
 	return 0;
 }
