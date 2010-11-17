@@ -126,6 +126,10 @@
 #define	  ATMEL_TSADCC_YPOS		(0x3ff <<  0)	/* Y Position */
 #define	  ATMEL_TSADCC_YSCALE		(0x3ff << 16)	/* Scale of Y Position */
 
+#define ATMEL_TSADCC_PRESSR	0xbc	/* Touchscreen Pressure Register */
+#define	  ATMEL_TSADCC_PRESSR_Z1	(0x3ff <<  0)	/* Data of Z1 Measurement */
+#define	  ATMEL_TSADCC_PRESSR_Z2	(0x3ff << 16)	/* Data of Z2 Measurement */
+
 /* 9x5 ADC registers which conflict with previous definition */
 #ifdef CONFIG_ARCH_AT91SAM9X5
 #undef	 ATMEL_TSADCC_TRGR

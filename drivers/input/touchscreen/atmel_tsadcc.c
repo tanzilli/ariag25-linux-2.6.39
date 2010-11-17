@@ -38,6 +38,7 @@ struct atmel_tsadcc {
 	int			irq;
 	unsigned int		prev_absx;
 	unsigned int		prev_absy;
+	unsigned int		prev_absz;
 	unsigned char		bufferedmeasure;
 };
 
@@ -53,6 +54,9 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 
 	unsigned int status;
 	unsigned int reg;
+	unsigned int z1, z2;
+	unsigned int Rxp = 1;
+	unsigned int factor = 1000;
 
 	status = atmel_tsadcc_read(ATMEL_TSADCC_SR);
 	status &= atmel_tsadcc_read(ATMEL_TSADCC_IMR);
@@ -101,11 +105,15 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 			/* Last measurement is always discarded, since it can
 			 * be erroneous.
 			 * Always report previous measurement */
-			dev_dbg(&input_dev->dev, "x = %d, y = %d\n",
-					ts_dev->prev_absx, ts_dev->prev_absy);
+			dev_dbg(&input_dev->dev,
+					"x = %d, y = %d, pressure = %d\n",
+					ts_dev->prev_absx, ts_dev->prev_absy,
+					ts_dev->prev_absz);
 			input_report_abs(input_dev, ABS_X, ts_dev->prev_absx);
 			input_report_abs(input_dev, ABS_Y, ts_dev->prev_absy);
 			input_report_key(input_dev, BTN_TOUCH, 1);
+			if (cpu_has_9x5_adc())
+				input_report_abs(input_dev, ABS_PRESSURE, ts_dev->prev_absz);
 			input_sync(input_dev);
 		} else
 			ts_dev->bufferedmeasure = 1;
@@ -114,6 +122,17 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 		if (cpu_has_9x5_adc()) {
 			ts_dev->prev_absx = atmel_tsadcc_read(ATMEL_TSADCC_XPOSR) & 0xffff;
 			ts_dev->prev_absy = atmel_tsadcc_read(ATMEL_TSADCC_YPOSR) & 0xffff;
+
+			/* calculate the pressure */
+			reg = atmel_tsadcc_read(ATMEL_TSADCC_PRESSR);
+			z1 = reg & ATMEL_TSADCC_PRESSR_Z1;
+			z2 = (reg & ATMEL_TSADCC_PRESSR_Z2) >> 16;
+
+			if (z1 != 0)
+				ts_dev->prev_absz = Rxp * (ts_dev->prev_absx * factor / 1024) * (z2 * factor / z1 - factor) / factor;
+			else
+				ts_dev->prev_absz = 0;
+
 		} else {
 			ts_dev->prev_absx = atmel_tsadcc_read(ATMEL_TSADCC_CDR3) << 10;
 			ts_dev->prev_absx /= atmel_tsadcc_read(ATMEL_TSADCC_CDR2);
@@ -209,6 +228,7 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 	__set_bit(EV_ABS, input_dev->evbit);
 	input_set_abs_params(input_dev, ABS_X, 0, 0x3FF, 0, 0);
 	input_set_abs_params(input_dev, ABS_Y, 0, 0x3FF, 0, 0);
+	input_set_abs_params(input_dev, ABS_PRESSURE, 0, 0xffffff, 0, 0);
 
 	input_set_capability(input_dev, EV_KEY, BTN_TOUCH);
 
@@ -257,7 +277,7 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 
 	if (cpu_has_9x5_adc()) {
 		atmel_tsadcc_write(ATMEL_TSADCC_TSMR,
-					ATMEL_TSADCC_TSMODE_4WIRE_NO_PRESS	|
+					ATMEL_TSADCC_TSMODE_4WIRE_PRESS		|
 					ATMEL_TSADCC_NOTSDMA			|
 					ATMEL_TSADCC_PENDET_ENA			|
 					(pdata->pendet_debounce << 28)		|
