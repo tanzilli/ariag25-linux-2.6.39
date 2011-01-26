@@ -371,6 +371,23 @@ config MTD_NAND_ATMEL_ECC_HW
 
 	  If unsure, say Y
 
+config MTD_NAND_ATMEL_PMECC_HW
+	bool "Programmable Hardware ECC (BCH code)"
+	depends on ARCH_AT91SAM9X5
+	help
+	  Use Programmable Hardware ECC controller.
+
+	  The PMECC Controller is a programmable binary BCH (Bose, Chaudhuri
+	  and Hocquenghem) encoder/decoder. This controller can be used to
+	  generate redundancy information for both SLC and MLC NAND Flash
+	  devices.
+
+	  NB : hardware and software ECC schemes are incompatible.
+	  If you switch from one to another, you'll have to erase your
+	  mtd partition.
+
+	  If unsure, say Y
+
 config MTD_NAND_ATMEL_ECC_SOFT
 	bool "Software ECC"
 	help

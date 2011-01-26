@@ -15,6 +15,8 @@
  *     		(u-boot-1.1.5/board/atmel/at91sam9263ek/nand.c)
  *     (C) Copyright 2006 ATMEL Rousset, Lacressonniere Nicolas
  *
+ *  Add PMECC support for AT91SAM9X5 Series
+ *     (C) Copyright 2011 ATMEL, Hong Xu
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -36,7 +38,9 @@
 #include <mach/board.h>
 #include <mach/cpu.h>
 
-#ifdef CONFIG_MTD_NAND_ATMEL_ECC_HW
+#if defined(CONFIG_MTD_NAND_ATMEL_ECC_HW)
+#define hard_ecc	1
+#elif defined(CONFIG_MTD_NAND_ATMEL_PMECC_HW)
 #define hard_ecc	1
 #else
 #define hard_ecc	0
@@ -51,6 +55,8 @@
 static int use_dma = 1;
 module_param(use_dma, int, 0);
 
+#define NB_ERROR_MAX  25
+
 static int on_flash_bbt = 0;
 module_param(on_flash_bbt, int, 0);
 
@@ -60,8 +66,38 @@ module_param(on_flash_bbt, int, 0);
 #define ecc_writel(add, reg, value)			\
 	__raw_writel((value), add + ATMEL_ECC_##reg)
 
-#include "atmel_nand_ecc.h"	/* Hardware ECC registers */
+/* Register access macros for PMECC */
+#define pmecc_readl(addr, reg) \
+	__raw_readl((addr) + ATMEL_PMECC_##reg)
 
+#define pmecc_writel(addr, reg, value) \
+	__raw_writel((value), (addr) + ATMEL_PMECC_##reg)
+
+#define pmecc_readb_ecc(addr, sector, n) \
+	__raw_readb((addr) + ATMEL_PMECC_ECCx + ((sector) * 0x40) + (n))
+
+#define pmecc_readl_rem(addr, sector, n) \
+	__raw_readl((addr) + ATMEL_PMECC_REMx + ((sector) * 0x40) + (n))
+
+#define pmerrloc_readl(addr, reg) \
+	__raw_readl((addr) + ATMEL_PMERRLOC_##reg)
+
+#define pmerrloc_writel(addr, reg, value) \
+	__raw_writel((value), (addr) + ATMEL_PMERRLOC_##reg)
+
+#define pmerrloc_writel_sigma(addr, n, value) \
+	__raw_writel((value), (addr) + ATMEL_PMERRLOC_SIGMAx + ((n) * 4))
+
+#define pmerrloc_readl_sigma(addr, n) \
+	__raw_readl((addr) + ATMEL_PMERRLOC_SIGMAx + ((n) * 4))
+
+#define pmerrloc_readl_el(addr, n) \
+	__raw_readl((addr) + ATMEL_PMERRLOC_ELx + ((n) * 4))
+
+/* Include Hardware ECC registers */
+#include "atmel_nand_ecc.h"
+
+#if defined(CONFIG_MTD_NAND_ATMEL_ECC_HW)
 /* oob layout for large page size
  * bad block info is on bytes 0 and 1
  * the bytes have to be consecutives to avoid
@@ -87,6 +123,7 @@ static struct nand_ecclayout atmel_oobinfo_small = {
 		{6, 10}
 	},
 };
+#endif
 
 struct atmel_nand_host {
 	struct nand_chip	nand_chip;
@@ -99,11 +136,45 @@ struct atmel_nand_host {
 
 	struct completion	comp;
 	struct dma_chan		*dma_chan;
+
+#if defined(CONFIG_MTD_NAND_ATMEL_PMECC_HW)
+	void __iomem		*pmerrloc_base;
+	void __iomem		*rom_base;
+	/* defines the error correcting capability */
+	int tt;
+	/* The number of ecc bytes for one sector */
+	int ecc_bytes_per_sector;
+	/* degree of the remainders, GF(2**mm) */
+	int mm;
+	/* length of codeword, nn=2**mm -1 */
+	int nn;
+	/* sector number per page */
+	int sector_number;
+	/* sector size in bytes */
+	int sector_size;
+
+	/* PMECC lookup table for alpha_to and index_of */
+	int16_t *alpha_to;
+	int16_t *index_of;
+
+	int16_t partial_syn[100];
+	int16_t si[100];
+	/* Sigma table */
+	int16_t smu[NB_ERROR_MAX + 2][2 * NB_ERROR_MAX + 1];
+	/** polynomal order */
+	int16_t lmu[NB_ERROR_MAX + 1];
+	uint8_t ecc_table[42 * 8];
+#endif
 };
+
+#if defined(CONFIG_MTD_NAND_ATMEL_PMECC_HW)
+#include "atmel_nand_pmecc.c"
+#endif
 
 static int cpu_has_dma(void)
 {
-	return cpu_is_at91sam9rl() || cpu_is_at91sam9g45();
+	return cpu_is_at91sam9rl() || cpu_is_at91sam9g45()
+	       || cpu_is_at91sam9x5();
 }
 
 /*
@@ -293,6 +364,7 @@ static void atmel_write_buf(struct mtd_info *mtd, const u8 *buf, int len)
 		atmel_write_buf8(mtd, buf, len);
 }
 
+#if defined(CONFIG_MTD_NAND_ATMEL_ECC_HW)
 /*
  * Calculate HW ECC
  *
@@ -479,6 +551,84 @@ static void atmel_nand_hwctl(struct mtd_info *mtd, int mode)
 	}
 }
 
+static int __init atmel_nand_init_params(struct platform_device *pdev,
+					 struct atmel_nand_host *host)
+{
+	struct resource *regs;
+	struct nand_chip *nand_chip;
+	struct mtd_info *mtd;
+
+	nand_chip = &host->nand_chip;
+	mtd = &host->mtd;
+
+	regs = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!regs && hard_ecc) {
+		dev_err(host->dev, "atmel_nand: can't get I/O resource "
+				"regs\nFalling back on software ECC\n");
+	}
+
+	nand_chip->ecc.mode = NAND_ECC_SOFT;	/* enable ECC */
+	if (no_ecc)
+		nand_chip->ecc.mode = NAND_ECC_NONE;
+	if (hard_ecc && regs) {
+		host->ecc = ioremap(regs->start, regs->end - regs->start + 1);
+		if (host->ecc == NULL) {
+			printk(KERN_ERR "atmel_nand: ioremap failed\n");
+			goto err_ecc_ioremap;
+		}
+
+		nand_chip->ecc.mode = NAND_ECC_HW;
+		nand_chip->ecc.calculate = atmel_nand_calculate;
+		nand_chip->ecc.correct = atmel_nand_correct;
+		nand_chip->ecc.hwctl = atmel_nand_hwctl;
+		nand_chip->ecc.read_page = atmel_nand_read_page;
+		nand_chip->ecc.bytes = 4;
+	}
+
+	if (nand_chip->ecc.mode == NAND_ECC_HW) {
+		/* ECC is calculated for the whole page (1 step) */
+		nand_chip->ecc.size = mtd->writesize;
+
+		/* set ECC page size and oob layout */
+		switch (mtd->writesize) {
+		case 512:
+			nand_chip->ecc.layout = &atmel_oobinfo_small;
+			ecc_writel(host->ecc, MR, ATMEL_ECC_PAGESIZE_528);
+			break;
+		case 1024:
+			nand_chip->ecc.layout = &atmel_oobinfo_large;
+			ecc_writel(host->ecc, MR, ATMEL_ECC_PAGESIZE_1056);
+			break;
+		case 2048:
+			nand_chip->ecc.layout = &atmel_oobinfo_large;
+			ecc_writel(host->ecc, MR, ATMEL_ECC_PAGESIZE_2112);
+			break;
+		case 4096:
+			nand_chip->ecc.layout = &atmel_oobinfo_large;
+			ecc_writel(host->ecc, MR, ATMEL_ECC_PAGESIZE_4224);
+			break;
+		default:
+			/* page size not handled by HW ECC */
+			/* switching back to soft ECC */
+			nand_chip->ecc.mode = NAND_ECC_SOFT;
+			nand_chip->ecc.calculate = NULL;
+			nand_chip->ecc.correct = NULL;
+			nand_chip->ecc.hwctl = NULL;
+			nand_chip->ecc.read_page = NULL;
+			nand_chip->ecc.postpad = 0;
+			nand_chip->ecc.prepad = 0;
+			nand_chip->ecc.bytes = 0;
+			break;
+		}
+	}
+
+	return 0;
+
+err_ecc_ioremap:
+	return -EIO;
+}
+#endif
+
 #ifdef CONFIG_MTD_CMDLINE_PARTS
 static const char *part_probes[] = { "cmdlinepart", NULL };
 #endif
@@ -491,9 +641,8 @@ static int __init atmel_nand_probe(struct platform_device *pdev)
 	struct atmel_nand_host *host;
 	struct mtd_info *mtd;
 	struct nand_chip *nand_chip;
-	struct resource *regs;
 	struct resource *mem;
-	int res;
+	int res = 0;
 
 #ifdef CONFIG_MTD_PARTITIONS
 	struct mtd_partition *partitions = NULL;
@@ -539,29 +688,9 @@ static int __init atmel_nand_probe(struct platform_device *pdev)
 	if (host->board->rdy_pin)
 		nand_chip->dev_ready = atmel_nand_device_ready;
 
-	regs = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	if (!regs && hard_ecc) {
-		printk(KERN_ERR "atmel_nand: can't get I/O resource "
-				"regs\nFalling back on software ECC\n");
-	}
-
 	nand_chip->ecc.mode = NAND_ECC_SOFT;	/* enable ECC */
 	if (no_ecc)
 		nand_chip->ecc.mode = NAND_ECC_NONE;
-	if (hard_ecc && regs) {
-		host->ecc = ioremap(regs->start, regs->end - regs->start + 1);
-		if (host->ecc == NULL) {
-			printk(KERN_ERR "atmel_nand: ioremap failed\n");
-			res = -EIO;
-			goto err_ecc_ioremap;
-		}
-		nand_chip->ecc.mode = NAND_ECC_HW;
-		nand_chip->ecc.calculate = atmel_nand_calculate;
-		nand_chip->ecc.correct = atmel_nand_correct;
-		nand_chip->ecc.hwctl = atmel_nand_hwctl;
-		nand_chip->ecc.read_page = atmel_nand_read_page;
-		nand_chip->ecc.bytes = 4;
-	}
 
 	nand_chip->chip_delay = 20;		/* 20us command delay time */
 
@@ -613,42 +742,13 @@ static int __init atmel_nand_probe(struct platform_device *pdev)
 		goto err_scan_ident;
 	}
 
-	if (nand_chip->ecc.mode == NAND_ECC_HW) {
-		/* ECC is calculated for the whole page (1 step) */
-		nand_chip->ecc.size = mtd->writesize;
-
-		/* set ECC page size and oob layout */
-		switch (mtd->writesize) {
-		case 512:
-			nand_chip->ecc.layout = &atmel_oobinfo_small;
-			ecc_writel(host->ecc, MR, ATMEL_ECC_PAGESIZE_528);
-			break;
-		case 1024:
-			nand_chip->ecc.layout = &atmel_oobinfo_large;
-			ecc_writel(host->ecc, MR, ATMEL_ECC_PAGESIZE_1056);
-			break;
-		case 2048:
-			nand_chip->ecc.layout = &atmel_oobinfo_large;
-			ecc_writel(host->ecc, MR, ATMEL_ECC_PAGESIZE_2112);
-			break;
-		case 4096:
-			nand_chip->ecc.layout = &atmel_oobinfo_large;
-			ecc_writel(host->ecc, MR, ATMEL_ECC_PAGESIZE_4224);
-			break;
-		default:
-			/* page size not handled by HW ECC */
-			/* switching back to soft ECC */
-			nand_chip->ecc.mode = NAND_ECC_SOFT;
-			nand_chip->ecc.calculate = NULL;
-			nand_chip->ecc.correct = NULL;
-			nand_chip->ecc.hwctl = NULL;
-			nand_chip->ecc.read_page = NULL;
-			nand_chip->ecc.postpad = 0;
-			nand_chip->ecc.prepad = 0;
-			nand_chip->ecc.bytes = 0;
-			break;
-		}
-	}
+#if defined(CONFIG_MTD_NAND_ATMEL_ECC_HW)
+	res = atmel_nand_init_params(pdev, host);
+#elif defined(CONFIG_MTD_NAND_ATMEL_PMECC_HW)
+	res = atmel_pmecc_init_params(pdev, host);
+#endif
+	if (res != 0)
+		goto err;
 
 	/* second phase scan */
 	if (nand_scan_tail(mtd)) {
@@ -680,6 +780,7 @@ static int __init atmel_nand_probe(struct platform_device *pdev)
 	if (!res)
 		return res;
 
+err:
 #ifdef CONFIG_MTD_PARTITIONS
 err_no_partitions:
 #endif
@@ -691,9 +792,6 @@ err_no_card:
 	platform_set_drvdata(pdev, NULL);
 	if (host->dma_chan)
 		dma_release_channel(host->dma_chan);
-	if (host->ecc)
-		iounmap(host->ecc);
-err_ecc_ioremap:
 	iounmap(host->io_base);
 err_nand_ioremap:
 	kfree(host);
@@ -712,6 +810,16 @@ static int __exit atmel_nand_remove(struct platform_device *pdev)
 
 	atmel_nand_disable(host);
 
+#if defined(CONFIG_MTD_NAND_ATMEL_PMECC_HW)
+	if (cpu_has_pmecc())
+			pmecc_writel(host->ecc, CTRL, PMECC_CTRL_DISABLE);
+	if (host->pmerrloc_base) {
+		pmerrloc_writel(host->pmerrloc_base, ELDIS, 0xffffffff);
+		iounmap(host->pmerrloc_base);
+	}
+	if (host->rom_base)
+		iounmap(host->rom_base);
+#endif
 	if (host->ecc)
 		iounmap(host->ecc);
 
