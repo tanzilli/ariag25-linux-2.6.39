@@ -103,6 +103,8 @@
 /* Bitfields in CTRLB */
 #define	ATC_SIF(i)		(0x3 & (i))	/* Src tx done via AHB-Lite Interface i */
 #define	ATC_DIF(i)		((0x3 & (i)) <<  4)	/* Dst tx done via AHB-Lite Interface i */
+#define MEM_IF			0		/* specify AHB interface 0 as memory interface */
+#define PER_IF			1		/* specify AHB interface 1 as peripheral interface */
 #define	ATC_SRC_PIP		(0x1 <<  8)	/* Source Picture-in-Picture enabled */
 #define	ATC_DST_PIP		(0x1 << 12)	/* Destination Picture-in-Picture enabled */
 #define	ATC_SRC_DSCR_DIS	(0x1 << 16)	/* Src Descriptor fetch disable */

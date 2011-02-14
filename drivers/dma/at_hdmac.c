@@ -37,8 +37,7 @@
 
 #define	ATC_DEFAULT_CFG		(ATC_FIFOCFG_HALFFIFO)
 #define	ATC_DEFAULT_CTRLA	(0)
-#define	ATC_DEFAULT_CTRLB	(ATC_SIF(0)	\
-				|ATC_DIF(1))
+#define	ATC_DEFAULT_CTRLB	(ATC_SIF(MEM_IF) | ATC_DIF(MEM_IF))
 
 /*
  * Initial number of descriptors to allocate for each channel. This could
@@ -670,14 +669,14 @@ atc_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 	reg_width = atslave->reg_width;
 
 	ctrla = ATC_DEFAULT_CTRLA | atslave->ctrla;
-	ctrlb = ATC_DEFAULT_CTRLB | ATC_IEN;
+	ctrlb = ATC_IEN;
 
 	switch (direction) {
 	case DMA_TO_DEVICE:
 		ctrla |=  ATC_DST_WIDTH(reg_width);
 		ctrlb |=  ATC_DST_ADDR_MODE_FIXED
 			| ATC_SRC_ADDR_MODE_INCR
-			| ATC_FC_MEM2PER;
+			| ATC_FC_MEM2PER | ATC_SIF(MEM_IF) | ATC_DIF(PER_IF);
 		reg = atslave->tx_reg;
 		for_each_sg(sgl, sg, sg_len, i) {
 			struct at_desc	*desc;
@@ -718,7 +717,7 @@ atc_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 		ctrla |=  ATC_SRC_WIDTH(reg_width);
 		ctrlb |=  ATC_DST_ADDR_MODE_INCR
 			| ATC_SRC_ADDR_MODE_FIXED
-			| ATC_FC_PER2MEM;
+			| ATC_FC_PER2MEM | ATC_SIF(PER_IF) | ATC_DIF(MEM_IF);
 
 		reg = atslave->rx_reg;
 		for_each_sg(sgl, sg, sg_len, i) {
@@ -798,7 +797,7 @@ atc_prep_dma_cyclic(struct dma_chan *chan, dma_addr_t buf_addr, size_t buf_len,
 	unsigned int		periods = buf_len / period_len;
 	unsigned int		reg_width;
 	u32			ctrla;
-	u32			ctrlb;
+	u32			ctrlb = 0;
 	unsigned int		i;
 
 	dev_vdbg(chan2dev(chan), "prep_dma_cyclic: %s buf@0x%08x - %d (%d/%d)\n",
@@ -829,12 +828,11 @@ atc_prep_dma_cyclic(struct dma_chan *chan, dma_addr_t buf_addr, size_t buf_len,
 	if (unlikely(!(direction & (DMA_TO_DEVICE | DMA_FROM_DEVICE))))
 		goto err_out;
 
-	/* prepare common CRTLA/CTRLB values */
+	/* prepare common CRTLA value */
 	ctrla =   ATC_DEFAULT_CTRLA | atslave->ctrla
 		| ATC_DST_WIDTH(reg_width)
 		| ATC_SRC_WIDTH(reg_width)
 		| period_len >> reg_width;
-	ctrlb = ATC_DEFAULT_CTRLB;
 
 	/* build cyclic linked list */
 	for (i = 0; i < periods; i++) {
@@ -852,7 +850,8 @@ atc_prep_dma_cyclic(struct dma_chan *chan, dma_addr_t buf_addr, size_t buf_len,
 			desc->lli.ctrlb = ctrlb
 					| ATC_DST_ADDR_MODE_FIXED
 					| ATC_SRC_ADDR_MODE_INCR
-					| ATC_FC_MEM2PER;
+					| ATC_FC_MEM2PER
+					| ATC_SIF(MEM_IF) | ATC_DIF(PER_IF);
 			break;
 
 		case DMA_FROM_DEVICE:
@@ -862,7 +861,8 @@ atc_prep_dma_cyclic(struct dma_chan *chan, dma_addr_t buf_addr, size_t buf_len,
 			desc->lli.ctrlb = ctrlb
 					| ATC_DST_ADDR_MODE_INCR
 					| ATC_SRC_ADDR_MODE_FIXED
-					| ATC_FC_PER2MEM;
+					| ATC_FC_PER2MEM
+					| ATC_SIF(PER_IF) | ATC_DIF(MEM_IF);
 			break;
 
 		default:
