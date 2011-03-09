@@ -664,7 +664,9 @@ static int atmel_lcdfb_setup_9x5_core(struct fb_info *info)
 	}
 
 	/* Initialize control register 5 */
-	value = (sinfo->guard_time << LCDC_LCDCFG5_GUARDTIME_OFFSET)
+	/* In 9x5, the default_lcdcon2 will use for LCDCFG5 */
+	value = sinfo->default_lcdcon2;
+	value |= (sinfo->guard_time << LCDC_LCDCFG5_GUARDTIME_OFFSET)
 		| LCDC_LCDCFG5_DISPDLY
 		| LCDC_LCDCFG5_VSPDLYS;
 
@@ -673,27 +675,6 @@ static int atmel_lcdfb_setup_9x5_core(struct fb_info *info)
 	if (!(info->var.sync & FB_SYNC_VERT_HIGH_ACT))
 		value |= LCDC_LCDCFG5_VSPOL;
 
-	switch (info->var.bits_per_pixel) {
-	case 12:
-		value |= LCDC_LCDCFG5_MODE_OUTPUT_12BPP;
-		break;
-	case 16:
-		if (info->var.transp.offset != 0)
-			value |= LCDC_LCDCFG5_MODE_OUTPUT_12BPP;
-		else
-			value |= LCDC_LCDCFG5_MODE_OUTPUT_16BPP;
-		break;
-	case 18:
-		value |= LCDC_LCDCFG5_MODE_OUTPUT_18BPP;
-		break;
-	case 24:
-	case 32:
-		value |= LCDC_LCDCFG5_MODE_OUTPUT_24BPP;
-		break;
-	default:
-		BUG();
-		break;
-	}
 	dev_dbg(info->device, "  * LCDC_LCDCFG5 = %08lx\n", value);
 	lcdc_writel(sinfo, ATMEL_LCDC_LCDCFG5, value);
 
