@@ -48,6 +48,7 @@ struct atmel_spi {
 	struct spi_transfer	*next_transfer;
 	unsigned long		next_remaining_bytes;
 
+	/* scratch buffer */
 	void			*buffer;
 	dma_addr_t		buffer_dma;
 };
@@ -211,7 +212,7 @@ static void atmel_spi_next_xfer_data(struct spi_master *master,
 }
 
 /*
- * Submit next transfer for DMA.
+ * Submit next transfer for PDC.
  * lock is held, spi irq is blocked
  */
 static void atmel_spi_next_xfer(struct spi_master *master,
