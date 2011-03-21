@@ -74,6 +74,15 @@ config SPI_ATMEL
 	  This selects a driver for the Atmel SPI Controller, present on
 	  many AT32 (AVR32) and AT91 (ARM) chips.
 
+config SPI_ATMEL_DMA
+	bool "Atmel SPI DMA support"
+	depends on SPI_ATMEL && (ARCH_AT91SAM9G45 || ARCH_AT91SAM9X5) && DMA_ENGINE && EXPERIMENTAL
+	default y
+	help
+	  Say Y here if you want the Atmel SPI driver to use the DMA engine. Data transfers
+	  will be handled by the DMA controller: it will increase throughput and reduce
+	  CPU utilization.
+
 config SPI_BFIN
 	tristate "SPI controller driver for ADI Blackfin5xx"
 	depends on BLACKFIN
