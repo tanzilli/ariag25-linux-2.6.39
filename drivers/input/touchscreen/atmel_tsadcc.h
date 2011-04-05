@@ -34,6 +34,7 @@
 #define	  ATMEL_TSADCC_LOWRES	(1    <<  4)	/* Resolution selection */
 #define	  ATMEL_TSADCC_SLEEP	(1    <<  5)	/* Sleep mode */
 #define	  ATMEL_TSADCC_PENDET	(1    <<  6)	/* Pen Detect selection */
+#define   ATMEL_TSADCC_FWUP	(1    <<  6)	/* Fast Wake Up selection (5series) */
 #define	  ATMEL_TSADCC_PRES	(1    <<  7)	/* Pressure Measurement Selection */
 #define	  ATMEL_TSADCC_PRESCAL	(0x3f <<  8)	/* Prescalar Rate Selection */
 #define	  ATMEL_TSADCC_EPRESCAL	(0xff <<  8)	/* Prescalar Rate Selection (Extended) */

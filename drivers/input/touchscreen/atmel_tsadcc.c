@@ -96,7 +96,7 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 		atmel_tsadcc_write(ATMEL_TSADCC_IER,
 				   ATMEL_TSADCC_CONVERSION_END | ATMEL_TSADCC_NOCNT);
 		atmel_tsadcc_write(ATMEL_TSADCC_TRGR,
-				   ATMEL_TSADCC_TRGMOD_PERIOD | (0x0FFF << 16));
+				   ATMEL_TSADCC_TRGMOD_PERIOD | (0x00D0 << 16));
 
 	} else if ((status & ATMEL_TSADCC_CONVERSION_END) == ATMEL_TSADCC_CONVERSION_END) {
 		/* Conversion finished */
@@ -259,6 +259,7 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 
 	if (cpu_has_9x5_adc()) {
 		reg = 	((0x01 << 5) & ATMEL_TSADCC_SLEEP)	|	/* Sleep Mode */
+			((0x01 << 6) & ATMEL_TSADCC_FWUP)	|	/* Fast Wake Up */
 			(prsc << 8)				|
 			((0x8 << 16) & ATMEL_TSADCC_STARTUP)	|
 			((pdata->ts_sample_hold_time << 24) & ATMEL_TSADCC_TRACKTIM);
@@ -277,11 +278,12 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 
 	if (cpu_has_9x5_adc()) {
 		atmel_tsadcc_write(ATMEL_TSADCC_TSMR,
-					ATMEL_TSADCC_TSMODE_4WIRE_PRESS		|
-					ATMEL_TSADCC_NOTSDMA			|
-					ATMEL_TSADCC_PENDET_ENA			|
-					(pdata->pendet_debounce << 28)		|
-					(0x0 << 8));
+					ATMEL_TSADCC_TSMODE_4WIRE_PRESS	|
+					(pdata->filtering_average << 4)	|	/* Touchscreen average */
+					ATMEL_TSADCC_NOTSDMA		|
+					ATMEL_TSADCC_PENDET_ENA		|
+					(pdata->pendet_debounce << 28)	|
+					(0x3 << 8));				/* Touchscreen freq */
 	} else {
 		atmel_tsadcc_write(ATMEL_TSADCC_TSR,
 			(pdata->ts_sample_hold_time << 24) & ATMEL_TSADCC_TSSHTIM);
