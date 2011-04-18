@@ -371,7 +371,7 @@ config SERIAL_ATMEL_CONSOLE
 
 config SERIAL_ATMEL_PDC
 	bool "Support DMA transfers on AT91 / AT32 serial port"
-	depends on SERIAL_ATMEL
+	depends on SERIAL_ATMEL && !(ARCH_AT91SAM9X5)
 	default y
 	help
 	  Say Y here if you wish to use the PDC to do DMA transfers to
@@ -383,6 +383,14 @@ config SERIAL_ATMEL_PDC
 	  Note that break and error handling currently doesn't work
 	  properly when DMA is enabled. Make sure that ports where
 	  this matters don't use DMA.
+
+config SERIAL_ATMEL_DMA
+	bool "Atmel Serial DMA support"
+	depends on SERIAL_ATMEL && ARCH_AT91SAM9X5 && DMA_ENGINE && EXPERIMENTAL
+	default y
+	help
+	  Say Y here to have the Atmel serial driver use a DMA engine to do data
+	  transfers and thus increase the throughput and reduce the CPU utilization.
 
 config SERIAL_ATMEL_TTYAT
 	bool "Install as device ttyATn instead of ttySn"
