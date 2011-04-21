@@ -1107,6 +1107,7 @@ static void atc_free_chan_resources(struct dma_chan *chan)
 	}
 	list_splice_init(&atchan->free_list, &list);
 	atchan->descs_allocated = 0;
+	atchan->status = 0;
 
 	dev_vdbg(chan2dev(chan), "free_chan_resources: done\n");
 }
