@@ -103,6 +103,9 @@
 #define	  ATMEL_TSADCC_NOPEN		(1 << 30)	/* No Pen Contact */
 #define	  ATMEL_TSADCC_PENDET_STATUS	(1 << 31)	/* Pen Detect Status (not interrupt source) */
 
+#define ATMEL_TSADCC_ACR	0x94	/* Analog Control Register */
+#define	  ATMEL_TSADCC_PENDET_SENSITIVITY	(0x3 << 0)	/* ADC internal resistor */
+
 #define ATMEL_TSADCC_TSMR	0xb0
 #define	  ATMEL_TSADCC_TSMODE		(3 <<  0)	/* Touch Screen Mode */
 #define	    ATMEL_TSADCC_TSMODE_NO		(0 << 0)	/* No Touch Screen */

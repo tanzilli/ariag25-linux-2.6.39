@@ -47,6 +47,17 @@ static void __iomem		*tsc_base;
 #define atmel_tsadcc_read(reg)		__raw_readl(tsc_base + (reg))
 #define atmel_tsadcc_write(reg, val)	__raw_writel((val), tsc_base + (reg))
 
+static void atmel_tsadcc_dump_conf(struct platform_device *pdev)
+{
+	dev_info(&pdev->dev, "--- configuration ---\n");
+	dev_info(&pdev->dev, "Mode Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_MR));
+	dev_info(&pdev->dev, "Trigger Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_TRGR));
+	dev_info(&pdev->dev, "Touchscreen Mode Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_TSMR));
+	dev_info(&pdev->dev, "Analog Control Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_ACR));
+	dev_info(&pdev->dev, "ADC Channel Status Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_CHSR));
+	dev_info(&pdev->dev, "---------------------\n");
+}
+
 static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 {
 	struct atmel_tsadcc	*ts_dev = (struct atmel_tsadcc *)dev;
@@ -95,8 +106,14 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 		atmel_tsadcc_write(ATMEL_TSADCC_IDR, ATMEL_TSADCC_PENCNT);
 		atmel_tsadcc_write(ATMEL_TSADCC_IER,
 				   ATMEL_TSADCC_CONVERSION_END | ATMEL_TSADCC_NOCNT);
+		/* this value is related to the resistor bits value of
+		 * ACR register and R64. If internal resistor value is
+		 * increased then this value has to be increased. This
+		 * behavior seems to happen only with averaging on 8
+		 * values
+		 */
 		atmel_tsadcc_write(ATMEL_TSADCC_TRGR,
-				   ATMEL_TSADCC_TRGMOD_PERIOD | (0x00D0 << 16));
+				   ATMEL_TSADCC_TRGMOD_PERIOD | (0x0FF << 16));
 
 	} else if ((status & ATMEL_TSADCC_CONVERSION_END) == ATMEL_TSADCC_CONVERSION_END) {
 		/* Conversion finished */
@@ -289,8 +306,19 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 			(pdata->ts_sample_hold_time << 24) & ATMEL_TSADCC_TSSHTIM);
 	}
 
+	/* Change adc internal resistor value for better pen detection,
+	 * default value is 100 kOhm.
+	 * 0 = 200 kOhm, 1 = 150 kOhm, 2 = 100 kOhm, 3 = 50 kOhm
+	 * option only available on ES2 and higher
+	 */
+	if (cpu_has_9x5_adc()) {
+		atmel_tsadcc_write(ATMEL_TSADCC_ACR, pdata->pendet_sensitivity);
+	}
+
 	atmel_tsadcc_read(ATMEL_TSADCC_SR);
 	atmel_tsadcc_write(ATMEL_TSADCC_IER, ATMEL_TSADCC_PENCNT);
+
+	/* atmel_tsadcc_dump_conf(pdev); */
 
 	/* All went ok, so register to the input system */
 	err = input_register_device(input_dev);
