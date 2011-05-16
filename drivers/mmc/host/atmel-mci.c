@@ -1891,8 +1891,59 @@ static int __exit atmci_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int atmci_suspend(struct platform_device *pdev, pm_message_t mesg)
+{
+	struct atmel_mci *host = platform_get_drvdata(pdev);
+	struct atmel_mci_slot *slot;
+	int i, ret;
+
+	 for (i = 0; i < ATMEL_MCI_MAX_NR_SLOTS; i++) {
+		slot = host->slot[i];
+		if (!slot)
+			continue;
+		ret = mmc_suspend_host(slot->mmc);
+		if (ret < 0) {
+			while (--i >= 0) {
+				slot = host->slot[i];
+				if (slot)
+					mmc_resume_host(host->slot[i]->mmc);
+			}
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+static int atmci_resume(struct platform_device *pdev)
+{
+	struct atmel_mci *host = platform_get_drvdata(pdev);
+	struct atmel_mci_slot *slot;
+	int i, ret;
+
+	for (i = 0; i < ATMEL_MCI_MAX_NR_SLOTS; i++) {
+		slot = host->slot[i];
+		if (!slot)
+			continue;
+		ret = mmc_resume_host(slot->mmc);
+		if (ret < 0)
+			return ret;
+	}
+
+	return 0;
+}
+#else
+#define atmci_suspend	NULL
+#define atmci_resume	NULL
+#endif
+
+
+
 static struct platform_driver atmci_driver = {
 	.remove		= __exit_p(atmci_remove),
+	.suspend	= atmci_suspend,
+	.resume		= atmci_resume,
 	.driver		= {
 		.name		= "atmel_mci",
 	},
