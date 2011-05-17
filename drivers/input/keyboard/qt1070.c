@@ -42,6 +42,9 @@
 #define QT1070_FW_VERSION  0x15
 
 #define DET_STATUS         0x02
+#define DET_STATUS_TOUCH   0x01
+#define DET_STATUS_OVER    0x40
+#define DET_STATUS_CALIBR  0x80
 
 #define KEY_STATUS         0x03
 
@@ -52,6 +55,10 @@
 /* Reset */
 #define RESET              0x39
 #define QT1070_RESET_TIME  255
+
+/* Low Power Mode */
+#define LP_MODE            0x54
+#define LP_MODE_LOW        255
 
 /* AT42QT1070 support up to 7 keys */
 static const unsigned short qt1070_key2code[] = {
@@ -65,6 +72,7 @@ struct qt1070_data {
 	unsigned int irq;
 	unsigned short keycodes[ARRAY_SIZE(qt1070_key2code)];
 	u8 last_keys;
+	u8 power_mode;
 };
 
 static int qt1070_read(struct i2c_client *client, u8 reg)
@@ -114,13 +122,28 @@ static bool __devinit qt1070_identify(struct i2c_client *client)
 	return true;
 }
 
+static void qt1070_report_key_pressed(struct qt1070_data *data, u8 key)
+{
+	struct input_dev *input = data->input;
+	int i;
+	u8 keyval, mask = 0x01;
+
+	for (i = 0; i < ARRAY_SIZE(qt1070_key2code); i++) {
+		keyval = key & mask;
+		if ((data->last_keys & mask) != keyval)
+			input_report_key(input, data->keycodes[i], keyval);
+		mask <<= 1;
+	}
+	input_sync(input);
+
+	data->last_keys = key;
+}
+
 static irqreturn_t qt1070_interrupt(int irq, void *dev_id)
 {
 	struct qt1070_data *data = dev_id;
 	struct i2c_client *client = data->client;
-	struct input_dev *input = data->input;
-	int i;
-	u8 new_keys, keyval, mask = 0x01;
+	u8 new_keys;
 
 	/* Read the detected status register, thus clearing interrupt */
 	qt1070_read(client, DET_STATUS);
@@ -128,15 +151,7 @@ static irqreturn_t qt1070_interrupt(int irq, void *dev_id)
 	/* Read which key changed */
 	new_keys = qt1070_read(client, KEY_STATUS);
 
-	for (i = 0; i < ARRAY_SIZE(qt1070_key2code); i++) {
-		keyval = new_keys & mask;
-		if ((data->last_keys & mask) != keyval)
-			input_report_key(input, data->keycodes[i], keyval);
-		mask <<= 1;
-	}
-	input_sync(input);
-
-	data->last_keys = new_keys;
+	qt1070_report_key_pressed(data, new_keys);
 	return IRQ_HANDLED;
 }
 
@@ -228,6 +243,51 @@ err_free_mem:
 	kfree(data);
 	return err;
 }
+#ifdef CONFIG_PM
+static int qt1070_suspend(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct qt1070_data *data = i2c_get_clientdata(client);
+
+	if (device_may_wakeup(dev)) {
+		enable_irq_wake(client->irq);
+	}
+
+	data->power_mode = qt1070_read(client, LP_MODE);
+	qt1070_write(client, LP_MODE, LP_MODE_LOW);
+
+	return 0;
+}
+
+static int qt1070_resume(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct qt1070_data *data = i2c_get_clientdata(client);
+	u8 new_keys;
+
+	if (device_may_wakeup(dev)) {
+		disable_irq_wake(client->irq);
+	}
+
+	/* Read the detected status register, thus clearing interrupt */
+	qt1070_read(client, DET_STATUS);
+
+	/* Read which key changed */
+	new_keys = qt1070_read(client, KEY_STATUS);
+
+	qt1070_report_key_pressed(data, new_keys);
+
+	/* Restore power mode */
+	qt1070_write(client, LP_MODE, data->power_mode);
+
+	/* Drain remaining status */
+	while (qt1070_read(client, DET_STATUS) & DET_STATUS_TOUCH)
+		udelay(1);
+
+	return 0;
+}
+#endif
+static SIMPLE_DEV_PM_OPS(qt1070_pm, qt1070_suspend, qt1070_resume);
 
 static int __devexit qt1070_remove(struct i2c_client *client)
 {
@@ -254,6 +314,7 @@ static struct i2c_driver qt1070_driver = {
 	.driver	= {
 		.name	= "qt1070",
 		.owner	= THIS_MODULE,
+		.pm	= &qt1070_pm,
 	},
 	.id_table	= qt1070_id,
 	.probe		= qt1070_probe,
