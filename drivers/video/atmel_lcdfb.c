@@ -194,6 +194,23 @@ static int atmel_lcdfb_setup_core(struct fb_info *info)
 	return 0;
 }
 
+static irqreturn_t atmel_lcdfb_interrupt(int irq, void *dev_id)
+{
+	struct fb_info *info = dev_id;
+	struct atmel_lcdfb_info *sinfo = info->par;
+	u32 status;
+
+	status = lcdc_readl(sinfo, ATMEL_LCDC_ISR);
+	if (status & ATMEL_LCDC_UFLWI) {
+		dev_warn(info->device, "FIFO underflow %#x\n", status);
+		/* reset DMA and FIFO to avoid screen shifting */
+		schedule_work(&sinfo->task);
+	}
+	lcdc_writel(sinfo, ATMEL_LCDC_ICR, status);
+	return IRQ_HANDLED;
+}
+
+#ifdef CONFIG_PM
 
 static int atmel_lcdfb_suspend(struct platform_device *pdev, pm_message_t mesg)
 {
@@ -246,6 +263,7 @@ static struct atmel_lcdfb_devdata dev_data = {
 	.setup_core = atmel_lcdfb_setup_core,
 	.start = atmel_lcdfb_start,
 	.stop = atmel_lcdfb_stop,
+	.isr = atmel_lcdfb_interrupt,
 };
 
 static int __init atmel_lcdfb_probe(struct platform_device *pdev)

@@ -602,22 +602,6 @@ static struct fb_ops atmel_lcdfb_ops = {
 	.fb_imageblit	= cfb_imageblit,
 };
 
-static irqreturn_t atmel_lcdfb_interrupt(int irq, void *dev_id)
-{
-	struct fb_info *info = dev_id;
-	struct atmel_lcdfb_info *sinfo = info->par;
-	u32 status;
-
-	status = lcdc_readl(sinfo, ATMEL_LCDC_ISR);
-	if (status & ATMEL_LCDC_UFLWI) {
-		dev_warn(info->device, "FIFO underflow %#x\n", status);
-		/* reset DMA and FIFO to avoid screen shifting */
-		schedule_work(&sinfo->task);
-	}
-	lcdc_writel(sinfo, ATMEL_LCDC_ICR, status);
-	return IRQ_HANDLED;
-}
-
 /*
  * LCD controller task (to reset the LCD)
  */
@@ -750,12 +734,8 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 		goto stop_clk;
 	}
 
+	/* No error checking, some devices can do without IRQ */
 	sinfo->irq_base = platform_get_irq(pdev, 0);
-	if (sinfo->irq_base < 0) {
-		dev_err(dev, "unable to get irq\n");
-		ret = sinfo->irq_base;
-		goto stop_clk;
-	}
 
 	/* Initialize video memory */
 	map = platform_get_resource(pdev, IORESOURCE_MEM, 1);
@@ -806,10 +786,13 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 	init_contrast(sinfo);
 
 	/* interrupt */
-	ret = request_irq(sinfo->irq_base, atmel_lcdfb_interrupt, 0, pdev->name, info);
-	if (ret) {
-		dev_err(dev, "request_irq failed: %d\n", ret);
-		goto unmap_mmio;
+	if (sinfo->irq_base >= 0) {
+		ret = request_irq(sinfo->irq_base, sinfo->dev_data->isr,
+				IRQF_SHARED, pdev->name, info);
+		if (ret) {
+			dev_err(dev, "request_irq failed: %d\n", ret);
+			goto unmap_mmio;
+		}
 	}
 
 	/* Some operations on the LCDC might sleep and
@@ -864,7 +847,8 @@ free_cmap:
 	fb_dealloc_cmap(&info->cmap);
 unregister_irqs:
 	cancel_work_sync(&sinfo->task);
-	free_irq(sinfo->irq_base, info);
+	if (sinfo->irq_base >= 0)
+		free_irq(sinfo->irq_base, info);
 unmap_mmio:
 	exit_backlight(sinfo);
 	iounmap(sinfo->mmio);
@@ -913,7 +897,8 @@ int __atmel_lcdfb_remove(struct platform_device *pdev)
 	if (sinfo->bus_clk)
 		clk_put(sinfo->bus_clk);
 	fb_dealloc_cmap(&info->cmap);
-	free_irq(sinfo->irq_base, info);
+	if (sinfo->irq_base >= 0)
+		free_irq(sinfo->irq_base, info);
 	iounmap(sinfo->mmio);
  	release_mem_region(info->fix.mmio_start, info->fix.mmio_len);
 	if (platform_get_resource(pdev, IORESOURCE_MEM, 1)) {
