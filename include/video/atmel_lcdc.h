@@ -24,6 +24,7 @@
 
 #include <linux/workqueue.h>
 #include <linux/interrupt.h>
+#include <linux/backlight.h>
 
 /* Way LCD wires are connected to the chip:
  * Some Atmel chips use BGR color mode (instead of standard RGB)
@@ -48,6 +49,8 @@ struct atmel_lcdfb_devdata {
 	void (*start)(struct atmel_lcdfb_info *sinfo);
 	void (*stop)(struct atmel_lcdfb_info *sinfo, u32 flags);
 	irqreturn_t (*isr)(int irq, void *dev_id);
+	void (*init_contrast)(struct atmel_lcdfb_info *sinfo);
+	const struct backlight_ops *bl_ops;
 };
 
  /* LCD Controller info data structure, stored in device platform_data */

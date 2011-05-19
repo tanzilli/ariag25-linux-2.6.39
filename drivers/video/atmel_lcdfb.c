@@ -11,6 +11,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
+#include <linux/backlight.h>
 #include <linux/fb.h>
 #include <linux/clk.h>
 #include <linux/init.h>
@@ -22,8 +23,66 @@
 #include <video/atmel_lcdc.h>
 
 /* configurable parameters */
+#define ATMEL_LCDC_CVAL_DEFAULT		0xc8
 #define ATMEL_LCDC_DMA_BURST_LEN	8	/* words */
 #define ATMEL_LCDC_FIFO_SIZE		512	/* words */
+
+static u32 contrast_ctr = ATMEL_LCDC_PS_DIV8
+		| ATMEL_LCDC_POL_POSITIVE
+		| ATMEL_LCDC_ENA_PWMENABLE;
+
+/* some bl->props field just changed */
+static int atmel_bl_update_status(struct backlight_device *bl)
+{
+	struct atmel_lcdfb_info *sinfo = bl_get_data(bl);
+	int power = sinfo->bl_power;
+	int brightness = bl->props.brightness;
+
+	/* REVISIT there may be a meaningful difference between
+	 * fb_blank and power ... there seem to be some cases
+	 * this doesn't handle correctly.
+	 */
+	if (bl->props.fb_blank != sinfo->bl_power)
+		power = bl->props.fb_blank;
+	else if (bl->props.power != sinfo->bl_power)
+		power = bl->props.power;
+
+	if (brightness < 0 && power == FB_BLANK_UNBLANK)
+		brightness = lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
+	else if (power != FB_BLANK_UNBLANK)
+		brightness = 0;
+
+	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_VAL, brightness);
+	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR,
+			brightness ? contrast_ctr : 0);
+
+	bl->props.fb_blank = bl->props.power = sinfo->bl_power = power;
+
+	return 0;
+}
+
+static int atmel_bl_get_brightness(struct backlight_device *bl)
+{
+	struct atmel_lcdfb_info *sinfo = bl_get_data(bl);
+
+	return lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
+}
+
+static const struct backlight_ops atmel_lcdc_bl_ops = {
+	.update_status = atmel_bl_update_status,
+	.get_brightness = atmel_bl_get_brightness,
+};
+
+static void atmel_lcdfb_init_contrast(struct atmel_lcdfb_info *sinfo)
+{
+	/* contrast pwm can be 'inverted' */
+	if (sinfo->lcdcon_pol_negative)
+			contrast_ctr &= ~(ATMEL_LCDC_POL_POSITIVE);
+
+	/* have some default contrast/backlight settings */
+	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR, contrast_ctr);
+	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_VAL, ATMEL_LCDC_CVAL_DEFAULT);
+}
 
 void atmel_lcdfb_start(struct atmel_lcdfb_info *sinfo)
 {
@@ -264,6 +323,8 @@ static struct atmel_lcdfb_devdata dev_data = {
 	.start = atmel_lcdfb_start,
 	.stop = atmel_lcdfb_stop,
 	.isr = atmel_lcdfb_interrupt,
+	.bl_ops = &atmel_lcdc_bl_ops,
+	.init_contrast = atmel_lcdfb_init_contrast,
 };
 
 static int __init atmel_lcdfb_probe(struct platform_device *pdev)

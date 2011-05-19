@@ -16,7 +16,6 @@
 #include <linux/fb.h>
 #include <linux/init.h>
 #include <linux/delay.h>
-#include <linux/backlight.h>
 #include <linux/gfp.h>
 
 #include <mach/board.h>
@@ -63,53 +62,7 @@ static void atmel_lcdfb_update_dma2d(struct atmel_lcdfb_info *sinfo,
 }
 #endif
 
-static u32 contrast_ctr = ATMEL_LCDC_PS_DIV8
-		| ATMEL_LCDC_POL_POSITIVE
-		| ATMEL_LCDC_ENA_PWMENABLE;
-
 #ifdef CONFIG_BACKLIGHT_ATMEL_LCDC
-
-/* some bl->props field just changed */
-static int atmel_bl_update_status(struct backlight_device *bl)
-{
-	struct atmel_lcdfb_info *sinfo = bl_get_data(bl);
-	int			power = sinfo->bl_power;
-	int			brightness = bl->props.brightness;
-
-	/* REVISIT there may be a meaningful difference between
-	 * fb_blank and power ... there seem to be some cases
-	 * this doesn't handle correctly.
-	 */
-	if (bl->props.fb_blank != sinfo->bl_power)
-		power = bl->props.fb_blank;
-	else if (bl->props.power != sinfo->bl_power)
-		power = bl->props.power;
-
-	if (brightness < 0 && power == FB_BLANK_UNBLANK)
-		brightness = lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
-	else if (power != FB_BLANK_UNBLANK)
-		brightness = 0;
-
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_VAL, brightness);
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR,
-			brightness ? contrast_ctr : 0);
-
-	bl->props.fb_blank = bl->props.power = sinfo->bl_power = power;
-
-	return 0;
-}
-
-static int atmel_bl_get_brightness(struct backlight_device *bl)
-{
-	struct atmel_lcdfb_info *sinfo = bl_get_data(bl);
-
-	return lcdc_readl(sinfo, ATMEL_LCDC_CONTRAST_VAL);
-}
-
-static const struct backlight_ops atmel_lcdc_bl_ops = {
-	.update_status = atmel_bl_update_status,
-	.get_brightness = atmel_bl_get_brightness,
-};
 
 static void init_backlight(struct atmel_lcdfb_info *sinfo)
 {
@@ -118,14 +71,14 @@ static void init_backlight(struct atmel_lcdfb_info *sinfo)
 
 	sinfo->bl_power = FB_BLANK_UNBLANK;
 
-	if (sinfo->backlight)
+	if (sinfo->backlight || !sinfo->dev_data->bl_ops)
 		return;
 
 	memset(&props, 0, sizeof(struct backlight_properties));
 	props.type = BACKLIGHT_RAW;
 	props.max_brightness = 0xff;
 	bl = backlight_device_register("backlight", &sinfo->pdev->dev, sinfo,
-				       &atmel_lcdc_bl_ops, &props);
+				       sinfo->dev_data->bl_ops, &props);
 	if (IS_ERR(bl)) {
 		dev_err(&sinfo->pdev->dev, "error %ld on backlight register\n",
 				PTR_ERR(bl));
@@ -135,7 +88,7 @@ static void init_backlight(struct atmel_lcdfb_info *sinfo)
 
 	bl->props.power = FB_BLANK_UNBLANK;
 	bl->props.fb_blank = FB_BLANK_UNBLANK;
-	bl->props.brightness = atmel_bl_get_brightness(bl);
+	bl->props.brightness = sinfo->dev_data->bl_ops->get_brightness(bl);
 }
 
 static void exit_backlight(struct atmel_lcdfb_info *sinfo)
@@ -156,21 +109,6 @@ static void exit_backlight(struct atmel_lcdfb_info *sinfo)
 }
 
 #endif
-
-static void init_contrast(struct atmel_lcdfb_info *sinfo)
-{
-	/* contrast pwm can be 'inverted' */
-	if (sinfo->lcdcon_pol_negative)
-			contrast_ctr &= ~(ATMEL_LCDC_POL_POSITIVE);
-
-	/* have some default contrast/backlight settings */
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR, contrast_ctr);
-	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_VAL, ATMEL_LCDC_CVAL_DEFAULT);
-
-	if (sinfo->lcdcon_is_backlight)
-		init_backlight(sinfo);
-}
-
 
 static struct fb_fix_screeninfo atmel_lcdfb_fix = {
 	.type		= FB_TYPE_PACKED_PIXELS,
@@ -783,7 +721,10 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 	}
 
 	/* Initialize PWM for contrast or backlight ("off") */
-	init_contrast(sinfo);
+	if (sinfo->dev_data->init_contrast)
+		sinfo->dev_data->init_contrast(sinfo);
+	if (sinfo->lcdcon_is_backlight)
+		init_backlight(sinfo);
 
 	/* interrupt */
 	if (sinfo->irq_base >= 0) {
