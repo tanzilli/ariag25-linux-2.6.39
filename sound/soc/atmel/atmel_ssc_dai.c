@@ -48,7 +48,8 @@
 #include "atmel_ssc_dai.h"
 
 
-#if defined(CONFIG_ARCH_AT91SAM9260) || defined(CONFIG_ARCH_AT91SAM9G20)
+#if defined(CONFIG_ARCH_AT91SAM9260) || defined(CONFIG_ARCH_AT91SAM9G20) \
+	|| defined(CONFIG_ARCH_AT91SAM9X5)
 #define NUM_SSC_DEVICES		1
 #else
 #define NUM_SSC_DEVICES		3
@@ -86,6 +87,7 @@ static struct atmel_ssc_mask ssc_tx_mask = {
 static struct atmel_ssc_mask ssc_rx_mask = {
 	.ssc_enable	= SSC_BIT(CR_RXEN),
 	.ssc_disable	= SSC_BIT(CR_RXDIS),
+	.ssc_error	= SSC_BIT(SR_OVRUN),
 	.ssc_endx	= SSC_BIT(SR_ENDRX),
 	.ssc_endbuf	= SSC_BIT(SR_RXBUFF),
 	.pdc_enable	= ATMEL_PDC_RXTEN,
@@ -183,7 +185,8 @@ static irqreturn_t atmel_ssc_interrupt(int irq, void *dev_id)
 		if ((dma_params != NULL) &&
 			(dma_params->dma_intr_handler != NULL)) {
 			ssc_substream_mask = (dma_params->mask->ssc_endx |
-					dma_params->mask->ssc_endbuf);
+					dma_params->mask->ssc_endbuf |
+					dma_params->mask->ssc_error);
 			if (ssc_sr & ssc_substream_mask) {
 				dma_params->dma_intr_handler(ssc_sr,
 						dma_params->
@@ -376,19 +379,19 @@ static int atmel_ssc_hw_params(struct snd_pcm_substream *substream,
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S8:
 		bits = 8;
-		dma_params->pdc_xfer_size = 1;
+		dma_params->data_xfer_size = 1;
 		break;
 	case SNDRV_PCM_FORMAT_S16_LE:
 		bits = 16;
-		dma_params->pdc_xfer_size = 2;
+		dma_params->data_xfer_size = 2;
 		break;
 	case SNDRV_PCM_FORMAT_S24_LE:
 		bits = 24;
-		dma_params->pdc_xfer_size = 4;
+		dma_params->data_xfer_size = 4;
 		break;
 	case SNDRV_PCM_FORMAT_S32_LE:
 		bits = 32;
-		dma_params->pdc_xfer_size = 4;
+		dma_params->data_xfer_size = 4;
 		break;
 	default:
 		printk(KERN_WARNING "atmel_ssc_dai: unsupported PCM format");
@@ -561,15 +564,17 @@ static int atmel_ssc_hw_params(struct snd_pcm_substream *substream,
 		/* Reset the SSC and its PDC registers */
 		ssc_writel(ssc_p->ssc->regs, CR, SSC_BIT(CR_SWRST));
 
-		ssc_writel(ssc_p->ssc->regs, PDC_RPR, 0);
-		ssc_writel(ssc_p->ssc->regs, PDC_RCR, 0);
-		ssc_writel(ssc_p->ssc->regs, PDC_RNPR, 0);
-		ssc_writel(ssc_p->ssc->regs, PDC_RNCR, 0);
+		if (!ssc_use_dmaengine()) {
+			ssc_writel(ssc_p->ssc->regs, PDC_RPR, 0);
+			ssc_writel(ssc_p->ssc->regs, PDC_RCR, 0);
+			ssc_writel(ssc_p->ssc->regs, PDC_RNPR, 0);
+			ssc_writel(ssc_p->ssc->regs, PDC_RNCR, 0);
 
-		ssc_writel(ssc_p->ssc->regs, PDC_TPR, 0);
-		ssc_writel(ssc_p->ssc->regs, PDC_TCR, 0);
-		ssc_writel(ssc_p->ssc->regs, PDC_TNPR, 0);
-		ssc_writel(ssc_p->ssc->regs, PDC_TNCR, 0);
+			ssc_writel(ssc_p->ssc->regs, PDC_TPR, 0);
+			ssc_writel(ssc_p->ssc->regs, PDC_TCR, 0);
+			ssc_writel(ssc_p->ssc->regs, PDC_TNPR, 0);
+			ssc_writel(ssc_p->ssc->regs, PDC_TNCR, 0);
+		}
 
 		ret = request_irq(ssc_p->ssc->irq, atmel_ssc_interrupt, 0,
 				ssc_p->name, ssc_p);

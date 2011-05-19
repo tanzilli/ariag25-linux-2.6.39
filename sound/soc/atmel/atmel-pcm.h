@@ -50,6 +50,7 @@ struct atmel_pdc_regs {
 struct atmel_ssc_mask {
 	u32	ssc_enable;		/* SSC recv/trans enable */
 	u32	ssc_disable;		/* SSC recv/trans disable */
+	u32	ssc_error;		/* SSC error conditions */
 	u32	ssc_endx;		/* SSC ENDTX or ENDRX */
 	u32	ssc_endbuf;		/* SSC TXBUFE or RXBUFF */
 	u32	pdc_enable;		/* PDC recv/trans enable */
@@ -66,7 +67,8 @@ struct atmel_ssc_mask {
  */
 struct atmel_pcm_dma_params {
 	char *name;			/* stream identifier */
-	int pdc_xfer_size;		/* PDC counter increment in bytes */
+	int data_xfer_size;		/* PDC counter increment in bytes,
+					   DMA data transfer size in bytes */
 	struct ssc_device *ssc;		/* SSC device for stream */
 	struct atmel_pdc_regs *pdc;	/* PDC receive or transmit registers */
 	struct atmel_ssc_mask *mask;	/* SSC & PDC status bits */
