@@ -37,8 +37,13 @@ extern void atmel_lcdfb_stop(struct atmel_lcdfb_info *sinfo);
 extern void atmel_lcdfb_start_clock(struct atmel_lcdfb_info *sinfo);
 extern void atmel_lcdfb_stop_clock(struct atmel_lcdfb_info *sinfo);
 
-extern int __atmel_lcdfb_probe(struct platform_device *pdev);
+extern int __atmel_lcdfb_probe(struct platform_device *pdev,
+				struct atmel_lcdfb_devdata *devdata);
 extern int __atmel_lcdfb_remove(struct platform_device *pdev);
+
+struct atmel_lcdfb_devdata {
+	int (*setup_core)(struct fb_info *info);
+};
 
  /* LCD Controller info data structure, stored in device platform_data */
 struct atmel_lcdfb_info {
@@ -46,6 +51,7 @@ struct atmel_lcdfb_info {
 	struct fb_info		*info;
 	void __iomem		*mmio;
 	int			irq_base;
+	struct atmel_lcdfb_devdata *dev_data;
 	struct work_struct	task;
 
 	unsigned int		guard_time;
