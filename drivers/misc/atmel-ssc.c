@@ -101,6 +101,7 @@ static int __init ssc_probe(struct platform_device *pdev)
 		retval = -EINVAL;
 		goto out_clk;
 	}
+	ssc->phybase = regs->start;
 
 	/* disable all interrupts */
 	clk_enable(ssc->clk);
