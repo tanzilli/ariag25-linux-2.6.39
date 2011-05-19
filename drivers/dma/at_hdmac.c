@@ -933,6 +933,36 @@ static int atc_control(struct dma_chan *chan, enum dma_ctrl_cmd cmd,
 		clear_bit(ATC_IS_PAUSED, &atchan->status);
 
 		spin_unlock_irqrestore(&atchan->lock, flags);
+	} else if (cmd == DMA_SLAVE_CONFIG) {
+		struct dma_slave_config *dmaengine_cfg = (void *)arg;
+		struct at_dma_slave	*atslave = chan->private;
+		enum dma_slave_buswidth sdma_width;
+		enum at_dma_slave_width	atdma_width;
+
+		/* only modify transfer size width */
+		if (!atslave)
+			return -ENXIO;
+
+		if (dmaengine_cfg->direction == DMA_FROM_DEVICE) {
+			sdma_width = dmaengine_cfg->src_addr_width;
+		} else {
+			sdma_width = dmaengine_cfg->dst_addr_width;
+		}
+
+		switch (sdma_width) {
+		case DMA_SLAVE_BUSWIDTH_1_BYTE:
+			atdma_width = AT_DMA_SLAVE_WIDTH_8BIT;
+			break;
+		case DMA_SLAVE_BUSWIDTH_2_BYTES:
+			atdma_width = AT_DMA_SLAVE_WIDTH_16BIT;
+			break;
+		case DMA_SLAVE_BUSWIDTH_4_BYTES:
+			atdma_width = AT_DMA_SLAVE_WIDTH_32BIT;
+			break;
+		default:
+			return -EINVAL;
+		}
+		atslave->reg_width = atdma_width;
 	} else if (cmd == DMA_TERMINATE_ALL) {
 		struct at_desc	*desc, *_desc;
 		/*
