@@ -32,6 +32,13 @@
 #define ATMEL_LCDC_WIRING_RGB	1
 #define ATMEL_LCDC_WIRING_RGB555	2
 
+extern void atmel_lcdfb_start(struct atmel_lcdfb_info *sinfo);
+extern void atmel_lcdfb_stop(struct atmel_lcdfb_info *sinfo);
+extern void atmel_lcdfb_start_clock(struct atmel_lcdfb_info *sinfo);
+extern void atmel_lcdfb_stop_clock(struct atmel_lcdfb_info *sinfo);
+
+extern int __atmel_lcdfb_probe(struct platform_device *pdev);
+extern int __atmel_lcdfb_remove(struct platform_device *pdev);
 
  /* LCD Controller info data structure, stored in device platform_data */
 struct atmel_lcdfb_info {
@@ -46,9 +53,6 @@ struct atmel_lcdfb_info {
 	struct platform_device	*pdev;
 	struct clk		*bus_clk;
 	struct clk		*lcdc_clk;
-
-	struct lcd_dma_desc	*p_dma_desc;
-	dma_addr_t		dma_desc_phys;
 
 #ifdef CONFIG_BACKLIGHT_ATMEL_LCDC
 	struct backlight_device	*backlight;
@@ -68,11 +72,8 @@ struct atmel_lcdfb_info {
 	u32			pseudo_palette[16];
 };
 
-struct lcd_dma_desc {
-	u32	address;
-	u32	control;
-	u32	next;
-};
+#define lcdc_readl(sinfo, reg)		__raw_readl((sinfo)->mmio+(reg))
+#define lcdc_writel(sinfo, reg, val)	__raw_writel((val), (sinfo)->mmio+(reg))
 
 #define ATMEL_LCDC_DMABADDR1	0x00
 #define ATMEL_LCDC_DMABADDR2	0x04
