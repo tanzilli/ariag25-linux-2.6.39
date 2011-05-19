@@ -25,6 +25,32 @@
 #define ATMEL_LCDC_DMA_BURST_LEN	8	/* words */
 #define ATMEL_LCDC_FIFO_SIZE		512	/* words */
 
+void atmel_lcdfb_start(struct atmel_lcdfb_info *sinfo)
+{
+	lcdc_writel(sinfo, ATMEL_LCDC_DMACON, sinfo->default_dmacon);
+	lcdc_writel(sinfo, ATMEL_LCDC_PWRCON,
+		(sinfo->guard_time << ATMEL_LCDC_GUARDT_OFFSET)
+		| ATMEL_LCDC_PWR);
+}
+
+static void atmel_lcdfb_stop(struct atmel_lcdfb_info *sinfo, u32 flags)
+{
+	/* Turn off the LCD controller and the DMA controller */
+	lcdc_writel(sinfo, ATMEL_LCDC_PWRCON,
+			sinfo->guard_time << ATMEL_LCDC_GUARDT_OFFSET);
+
+	/* Wait for the LCDC core to become idle */
+	while (lcdc_readl(sinfo, ATMEL_LCDC_PWRCON) & ATMEL_LCDC_BUSY)
+		msleep(10);
+
+	lcdc_writel(sinfo, ATMEL_LCDC_DMACON, 0);
+
+	if (!(flags & ATMEL_LCDC_STOP_NOWAIT))
+		/* Wait for DMA engine to become idle... */
+		while (lcdc_readl(sinfo, ATMEL_LCDC_DMACON) & ATMEL_LCDC_DMABUSY)
+			msleep(10);
+}
+
 static unsigned long compute_hozval(unsigned long xres, unsigned long lcdcon2)
 {
 	unsigned long value;
@@ -186,7 +212,7 @@ static int atmel_lcdfb_suspend(struct platform_device *pdev, pm_message_t mesg)
 	if (sinfo->atmel_lcdfb_power_control)
 		sinfo->atmel_lcdfb_power_control(0);
 
-	atmel_lcdfb_stop(sinfo);
+	atmel_lcdfb_stop(sinfo, 0);
 	atmel_lcdfb_stop_clock(sinfo);
 
 	return 0;
@@ -218,6 +244,8 @@ static int atmel_lcdfb_resume(struct platform_device *pdev)
 
 static struct atmel_lcdfb_devdata dev_data = {
 	.setup_core = atmel_lcdfb_setup_core,
+	.start = atmel_lcdfb_start,
+	.stop = atmel_lcdfb_stop,
 };
 
 static int __init atmel_lcdfb_probe(struct platform_device *pdev)

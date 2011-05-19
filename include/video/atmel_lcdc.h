@@ -32,17 +32,20 @@
 #define ATMEL_LCDC_WIRING_RGB	1
 #define ATMEL_LCDC_WIRING_RGB555	2
 
-extern void atmel_lcdfb_start(struct atmel_lcdfb_info *sinfo);
-extern void atmel_lcdfb_stop(struct atmel_lcdfb_info *sinfo);
+#define ATMEL_LCDC_STOP_NOWAIT (1 << 0)
+
 extern void atmel_lcdfb_start_clock(struct atmel_lcdfb_info *sinfo);
 extern void atmel_lcdfb_stop_clock(struct atmel_lcdfb_info *sinfo);
-
 extern int __atmel_lcdfb_probe(struct platform_device *pdev,
 				struct atmel_lcdfb_devdata *devdata);
 extern int __atmel_lcdfb_remove(struct platform_device *pdev);
 
+struct atmel_lcdfb_info;
+
 struct atmel_lcdfb_devdata {
 	int (*setup_core)(struct fb_info *info);
+	void (*start)(struct atmel_lcdfb_info *sinfo);
+	void (*stop)(struct atmel_lcdfb_info *sinfo, u32 flags);
 };
 
  /* LCD Controller info data structure, stored in device platform_data */

@@ -181,38 +181,6 @@ static struct fb_fix_screeninfo atmel_lcdfb_fix = {
 	.accel		= FB_ACCEL_NONE,
 };
 
-static void atmel_lcdfb_stop_nowait(struct atmel_lcdfb_info *sinfo)
-{
-	/* Turn off the LCD controller and the DMA controller */
-	lcdc_writel(sinfo, ATMEL_LCDC_PWRCON,
-			sinfo->guard_time << ATMEL_LCDC_GUARDT_OFFSET);
-
-	/* Wait for the LCDC core to become idle */
-	while (lcdc_readl(sinfo, ATMEL_LCDC_PWRCON) & ATMEL_LCDC_BUSY)
-		msleep(10);
-
-	lcdc_writel(sinfo, ATMEL_LCDC_DMACON, 0);
-}
-
-void atmel_lcdfb_stop(struct atmel_lcdfb_info *sinfo)
-{
-	atmel_lcdfb_stop_nowait(sinfo);
-
-	/* Wait for DMA engine to become idle... */
-	while (lcdc_readl(sinfo, ATMEL_LCDC_DMACON) & ATMEL_LCDC_DMABUSY)
-		msleep(10);
-}
-EXPORT_SYMBOL_GPL(atmel_lcdfb_stop);
-
-void atmel_lcdfb_start(struct atmel_lcdfb_info *sinfo)
-{
-	lcdc_writel(sinfo, ATMEL_LCDC_DMACON, sinfo->default_dmacon);
-	lcdc_writel(sinfo, ATMEL_LCDC_PWRCON,
-		(sinfo->guard_time << ATMEL_LCDC_GUARDT_OFFSET)
-		| ATMEL_LCDC_PWR);
-}
-EXPORT_SYMBOL_GPL(atmel_lcdfb_start);
-
 static void atmel_lcdfb_update_dma(struct fb_info *info,
 			       struct fb_var_screeninfo *var)
 {
@@ -439,8 +407,10 @@ static void atmel_lcdfb_reset(struct atmel_lcdfb_info *sinfo)
 {
 	might_sleep();
 
-	atmel_lcdfb_stop(sinfo);
-	atmel_lcdfb_start(sinfo);
+	if (sinfo->dev_data->stop)
+		sinfo->dev_data->stop(sinfo, 0);
+	if (sinfo->dev_data->start)
+		sinfo->dev_data->start(sinfo);
 }
 
 /**
@@ -469,7 +439,8 @@ static int atmel_lcdfb_set_par(struct fb_info *info)
 		 info->var.xres, info->var.yres,
 		 info->var.xres_virtual, info->var.yres_virtual);
 
-	atmel_lcdfb_stop_nowait(sinfo);
+	if (sinfo->dev_data->stop)
+		sinfo->dev_data->stop(sinfo, ATMEL_LCDC_STOP_NOWAIT);
 
 	if (info->var.bits_per_pixel == 1)
 		info->fix.visual = FB_VISUAL_MONO01;
@@ -488,7 +459,8 @@ static int atmel_lcdfb_set_par(struct fb_info *info)
 	/* Now, the LCDC core... */
 	sinfo->dev_data->setup_core(info);
 
-	atmel_lcdfb_start(sinfo);
+	if (sinfo->dev_data->start)
+		sinfo->dev_data->start(sinfo);
 
 	dev_dbg(info->device, "  * DONE\n");
 
@@ -600,13 +572,15 @@ static int atmel_lcdfb_blank(int blank_mode, struct fb_info *info)
 	switch (blank_mode) {
 	case FB_BLANK_UNBLANK:
 	case FB_BLANK_NORMAL:
-		atmel_lcdfb_start(sinfo);
+		if (sinfo->dev_data->start)
+			sinfo->dev_data->start(sinfo);
 		break;
 	case FB_BLANK_VSYNC_SUSPEND:
 	case FB_BLANK_HSYNC_SUSPEND:
 		break;
 	case FB_BLANK_POWERDOWN:
-		atmel_lcdfb_stop(sinfo);
+		if (sinfo->dev_data->stop)
+			sinfo->dev_data->stop(sinfo, 0);
 		break;
 	default:
 		return -EINVAL;
