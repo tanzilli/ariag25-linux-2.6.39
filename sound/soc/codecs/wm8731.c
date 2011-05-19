@@ -492,7 +492,8 @@ static int wm8731_set_bias_level(struct snd_soc_codec *codec,
 		break;
 	case SND_SOC_BIAS_OFF:
 		snd_soc_write(codec, WM8731_ACTIVE, 0x0);
-		snd_soc_write(codec, WM8731_PWR, 0xffff);
+		/* standby: keep crystal oscillator enabled */
+		snd_soc_write(codec, WM8731_PWR, 0x00df);
 		regulator_bulk_disable(ARRAY_SIZE(wm8731->supplies),
 				       wm8731->supplies);
 		break;
@@ -544,6 +545,8 @@ static int wm8731_suspend(struct snd_soc_codec *codec, pm_message_t state)
 static int wm8731_resume(struct snd_soc_codec *codec)
 {
 	wm8731_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
+	if (codec->active)
+		snd_soc_write(codec, WM8731_ACTIVE, 0x0001);
 
 	return 0;
 }
