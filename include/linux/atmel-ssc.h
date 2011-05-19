@@ -3,6 +3,7 @@
 
 #include <linux/platform_device.h>
 #include <linux/list.h>
+#include <mach/cpu.h>
 
 struct ssc_device {
 	struct list_head	list;
@@ -309,5 +310,7 @@ void ssc_free(struct ssc_device *ssc);
 /* Register access macros */
 #define ssc_readl(base, reg)		__raw_readl(base + SSC_##reg)
 #define ssc_writel(base, reg, value)	__raw_writel((value), base + SSC_##reg)
+
+#define ssc_use_dmaengine()	cpu_is_at91sam9x5()
 
 #endif /* __INCLUDE_ATMEL_SSC_H */
