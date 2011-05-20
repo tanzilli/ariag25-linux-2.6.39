@@ -51,6 +51,7 @@ struct atmel_lcdfb_devdata {
 	irqreturn_t (*isr)(int irq, void *dev_id);
 	void (*update_dma)(struct fb_info *info, struct fb_var_screeninfo *var);
 	void (*init_contrast)(struct atmel_lcdfb_info *sinfo);
+	void (*limit_screeninfo)(struct fb_var_screeninfo *var);
 	const struct backlight_ops *bl_ops;
 	int fbinfo_flags;
 	u32 lut_base;

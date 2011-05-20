@@ -211,18 +211,8 @@ static int atmel_lcdfb_check_var(struct fb_var_screeninfo *var,
 	}
 
 	/* Saturate vertical and horizontal timings at maximum values */
-	var->vsync_len = min_t(u32, var->vsync_len,
-			(ATMEL_LCDC_VPW >> ATMEL_LCDC_VPW_OFFSET) + 1);
-	var->upper_margin = min_t(u32, var->upper_margin,
-			ATMEL_LCDC_VBP >> ATMEL_LCDC_VBP_OFFSET);
-	var->lower_margin = min_t(u32, var->lower_margin,
-			ATMEL_LCDC_VFP);
-	var->right_margin = min_t(u32, var->right_margin,
-			(ATMEL_LCDC_HFP >> ATMEL_LCDC_HFP_OFFSET) + 1);
-	var->hsync_len = min_t(u32, var->hsync_len,
-			(ATMEL_LCDC_HPW >> ATMEL_LCDC_HPW_OFFSET) + 1);
-	var->left_margin = min_t(u32, var->left_margin,
-			ATMEL_LCDC_HBP + 1);
+	if (sinfo->dev_data->limit_screeninfo)
+		sinfo->dev_data->limit_screeninfo(var);
 
 	/* Some parameters can't be zero */
 	var->vsync_len = max_t(u32, var->vsync_len, 1);

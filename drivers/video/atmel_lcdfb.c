@@ -306,6 +306,23 @@ static int atmel_lcdfb_setup_core(struct fb_info *info)
 	return 0;
 }
 
+static void atmelfb_limit_screeninfo(struct fb_var_screeninfo *var)
+{
+	/* Saturate vertical and horizontal timings at maximum values */
+	var->vsync_len = min_t(u32, var->vsync_len,
+			(ATMEL_LCDC_VPW >> ATMEL_LCDC_VPW_OFFSET) + 1);
+	var->upper_margin = min_t(u32, var->upper_margin,
+			ATMEL_LCDC_VBP >> ATMEL_LCDC_VBP_OFFSET);
+	var->lower_margin = min_t(u32, var->lower_margin,
+			ATMEL_LCDC_VFP);
+	var->right_margin = min_t(u32, var->right_margin,
+			(ATMEL_LCDC_HFP >> ATMEL_LCDC_HFP_OFFSET) + 1);
+	var->hsync_len = min_t(u32, var->hsync_len,
+			(ATMEL_LCDC_HPW >> ATMEL_LCDC_HPW_OFFSET) + 1);
+	var->left_margin = min_t(u32, var->left_margin,
+			ATMEL_LCDC_HBP + 1);
+}
+
 static irqreturn_t atmel_lcdfb_interrupt(int irq, void *dev_id)
 {
 	struct fb_info *info = dev_id;
@@ -379,6 +396,7 @@ static struct atmel_lcdfb_devdata dev_data = {
 	.update_dma = atmel_lcdfb_update_dma,
 	.bl_ops = &atmel_lcdc_bl_ops,
 	.init_contrast = atmel_lcdfb_init_contrast,
+	.limit_screeninfo = atmelfb_limit_screeninfo,
 	.fbinfo_flags = ATMEL_LCDFB_FBINFO_DEFAULT,
 	.lut_base = ATMEL_LCDC_LUT,
 };
