@@ -31,6 +31,59 @@ static u32 contrast_ctr = ATMEL_LCDC_PS_DIV8
 		| ATMEL_LCDC_POL_POSITIVE
 		| ATMEL_LCDC_ENA_PWMENABLE;
 
+#if defined(CONFIG_ARCH_AT91)
+#define	ATMEL_LCDFB_FBINFO_DEFAULT	(FBINFO_DEFAULT \
+					 | FBINFO_PARTIAL_PAN_OK \
+					 | FBINFO_HWACCEL_YPAN)
+
+static inline void atmel_lcdfb_update_dma2d(struct atmel_lcdfb_info *sinfo,
+					struct fb_var_screeninfo *var)
+{
+
+}
+#elif defined(CONFIG_AVR32)
+#define	ATMEL_LCDFB_FBINFO_DEFAULT	(FBINFO_DEFAULT \
+					| FBINFO_PARTIAL_PAN_OK \
+					| FBINFO_HWACCEL_XPAN \
+					| FBINFO_HWACCEL_YPAN)
+
+static void atmel_lcdfb_update_dma2d(struct atmel_lcdfb_info *sinfo,
+				     struct fb_var_screeninfo *var)
+{
+	u32 dma2dcfg;
+	u32 pixeloff;
+
+	pixeloff = (var->xoffset * var->bits_per_pixel) & 0x1f;
+
+	dma2dcfg = ((var->xres_virtual - var->xres) * var->bits_per_pixel) / 8;
+	dma2dcfg |= pixeloff << ATMEL_LCDC_PIXELOFF_OFFSET;
+	lcdc_writel(sinfo, ATMEL_LCDC_DMA2DCFG, dma2dcfg);
+
+	/* Update configuration */
+	lcdc_writel(sinfo, ATMEL_LCDC_DMACON,
+		    lcdc_readl(sinfo, ATMEL_LCDC_DMACON)
+		    | ATMEL_LCDC_DMAUPDT);
+}
+#endif
+
+static void atmel_lcdfb_update_dma(struct fb_info *info,
+			       struct fb_var_screeninfo *var)
+{
+	struct atmel_lcdfb_info *sinfo = info->par;
+	struct fb_fix_screeninfo *fix = &info->fix;
+	unsigned long dma_addr;
+
+	dma_addr = (fix->smem_start + var->yoffset * fix->line_length
+		    + var->xoffset * var->bits_per_pixel / 8);
+
+	dma_addr &= ~3UL;
+
+	/* Set framebuffer DMA base address and pixel offset */
+	lcdc_writel(sinfo, ATMEL_LCDC_DMABADDR1, dma_addr);
+
+	atmel_lcdfb_update_dma2d(sinfo, var);
+}
+
 /* some bl->props field just changed */
 static int atmel_bl_update_status(struct backlight_device *bl)
 {
@@ -323,8 +376,10 @@ static struct atmel_lcdfb_devdata dev_data = {
 	.start = atmel_lcdfb_start,
 	.stop = atmel_lcdfb_stop,
 	.isr = atmel_lcdfb_interrupt,
+	.update_dma = atmel_lcdfb_update_dma,
 	.bl_ops = &atmel_lcdc_bl_ops,
 	.init_contrast = atmel_lcdfb_init_contrast,
+	.fbinfo_flags = ATMEL_LCDFB_FBINFO_DEFAULT,
 };
 
 static int __init atmel_lcdfb_probe(struct platform_device *pdev)

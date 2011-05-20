@@ -49,8 +49,10 @@ struct atmel_lcdfb_devdata {
 	void (*start)(struct atmel_lcdfb_info *sinfo);
 	void (*stop)(struct atmel_lcdfb_info *sinfo, u32 flags);
 	irqreturn_t (*isr)(int irq, void *dev_id);
+	void (*update_dma)(struct fb_info *info, struct fb_var_screeninfo *var);
 	void (*init_contrast)(struct atmel_lcdfb_info *sinfo);
 	const struct backlight_ops *bl_ops;
+	int fbinfo_flags;
 };
 
  /* LCD Controller info data structure, stored in device platform_data */

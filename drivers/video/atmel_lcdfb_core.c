@@ -27,41 +27,6 @@
 /* configurable parameters */
 #define ATMEL_LCDC_CVAL_DEFAULT		0xc8
 
-#if defined(CONFIG_ARCH_AT91)
-#define	ATMEL_LCDFB_FBINFO_DEFAULT	(FBINFO_DEFAULT \
-					 | FBINFO_PARTIAL_PAN_OK \
-					 | FBINFO_HWACCEL_YPAN)
-
-static inline void atmel_lcdfb_update_dma2d(struct atmel_lcdfb_info *sinfo,
-					struct fb_var_screeninfo *var)
-{
-
-}
-#elif defined(CONFIG_AVR32)
-#define	ATMEL_LCDFB_FBINFO_DEFAULT	(FBINFO_DEFAULT \
-					| FBINFO_PARTIAL_PAN_OK \
-					| FBINFO_HWACCEL_XPAN \
-					| FBINFO_HWACCEL_YPAN)
-
-static void atmel_lcdfb_update_dma2d(struct atmel_lcdfb_info *sinfo,
-				     struct fb_var_screeninfo *var)
-{
-	u32 dma2dcfg;
-	u32 pixeloff;
-
-	pixeloff = (var->xoffset * var->bits_per_pixel) & 0x1f;
-
-	dma2dcfg = ((var->xres_virtual - var->xres) * var->bits_per_pixel) / 8;
-	dma2dcfg |= pixeloff << ATMEL_LCDC_PIXELOFF_OFFSET;
-	lcdc_writel(sinfo, ATMEL_LCDC_DMA2DCFG, dma2dcfg);
-
-	/* Update configuration */
-	lcdc_writel(sinfo, ATMEL_LCDC_DMACON,
-		    lcdc_readl(sinfo, ATMEL_LCDC_DMACON)
-		    | ATMEL_LCDC_DMAUPDT);
-}
-#endif
-
 #ifdef CONFIG_BACKLIGHT_ATMEL_LCDC
 
 static void init_backlight(struct atmel_lcdfb_info *sinfo)
@@ -118,24 +83,6 @@ static struct fb_fix_screeninfo atmel_lcdfb_fix = {
 	.ywrapstep	= 0,
 	.accel		= FB_ACCEL_NONE,
 };
-
-static void atmel_lcdfb_update_dma(struct fb_info *info,
-			       struct fb_var_screeninfo *var)
-{
-	struct atmel_lcdfb_info *sinfo = info->par;
-	struct fb_fix_screeninfo *fix = &info->fix;
-	unsigned long dma_addr;
-
-	dma_addr = (fix->smem_start + var->yoffset * fix->line_length
-		    + var->xoffset * var->bits_per_pixel / 8);
-
-	dma_addr &= ~3UL;
-
-	/* Set framebuffer DMA base address and pixel offset */
-	lcdc_writel(sinfo, ATMEL_LCDC_DMABADDR1, dma_addr);
-
-	atmel_lcdfb_update_dma2d(sinfo, var);
-}
 
 static inline void atmel_lcdfb_free_video_memory(struct atmel_lcdfb_info *sinfo)
 {
@@ -392,7 +339,7 @@ static int atmel_lcdfb_set_par(struct fb_info *info)
 
 	/* Re-initialize the DMA engine... */
 	dev_dbg(info->device, "  * update DMA engine\n");
-	atmel_lcdfb_update_dma(info, &info->var);
+	sinfo->dev_data->update_dma(info, &info->var);
 
 	/* Now, the LCDC core... */
 	sinfo->dev_data->setup_core(info);
@@ -496,9 +443,11 @@ static int atmel_lcdfb_setcolreg(unsigned int regno, unsigned int red,
 static int atmel_lcdfb_pan_display(struct fb_var_screeninfo *var,
 			       struct fb_info *info)
 {
+	struct atmel_lcdfb_info *sinfo = info->par;
+
 	dev_dbg(info->device, "%s\n", __func__);
 
-	atmel_lcdfb_update_dma(info, var);
+	sinfo->dev_data->update_dma(info, var);
 
 	return 0;
 }
@@ -633,7 +582,7 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 	sinfo->pdev = pdev;
 
 	strcpy(info->fix.id, sinfo->pdev->name);
-	info->flags = ATMEL_LCDFB_FBINFO_DEFAULT;
+	info->flags = dev_data->fbinfo_flags;
 	info->pseudo_palette = sinfo->pseudo_palette;
 	info->fbops = &atmel_lcdfb_ops;
 
