@@ -296,8 +296,10 @@ static int atmel_nand_dma_op(struct mtd_info *mtd, void *buf, int len,
 err_dma:
 	dma_unmap_single(dma_dev->dev, phys_addr, len, dir);
 err_buf:
+#if 0
 	if (err != 0)
 		dev_warn(host->dev, "Fall back to CPU I/O\n");
+#endif
 	return err;
 }
 
