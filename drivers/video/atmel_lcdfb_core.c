@@ -422,7 +422,8 @@ static int atmel_lcdfb_setcolreg(unsigned int regno, unsigned int red,
 			 *   ~(red[10] ^ green[10] ^ blue[10]) & 1
 			 */
 
-			lcdc_writel(sinfo, ATMEL_LCDC_LUT(regno), val);
+			lcdc_writel(sinfo, sinfo->dev_data->lut_base + regno * 4,
+					val);
 			ret = 0;
 		}
 		break;
@@ -430,7 +431,8 @@ static int atmel_lcdfb_setcolreg(unsigned int regno, unsigned int red,
 	case FB_VISUAL_MONO01:
 		if (regno < 2) {
 			val = (regno == 0) ? 0x00 : 0x1F;
-			lcdc_writel(sinfo, ATMEL_LCDC_LUT(regno), val);
+			lcdc_writel(sinfo, sinfo->dev_data->lut_base + regno * 4,
+					val);
 			ret = 0;
 		}
 		break;

@@ -53,6 +53,7 @@ struct atmel_lcdfb_devdata {
 	void (*init_contrast)(struct atmel_lcdfb_info *sinfo);
 	const struct backlight_ops *bl_ops;
 	int fbinfo_flags;
+	u32 lut_base;
 };
 
  /* LCD Controller info data structure, stored in device platform_data */
@@ -241,11 +242,6 @@ struct atmel_lcdfb_info {
 #define	ATMEL_LCDC_OWRI		(1 << 5)
 #define	ATMEL_LCDC_MERI		(1 << 6)
 
-#if !defined(CONFIG_ARCH_AT91SAM9X5)
-#define ATMEL_LCDC_LUT(n)	(0x0c00 + ((n)*4))
-#else
-/* Base layer CLUT */
-#define ATMEL_LCDC_LUT(n)	(0x0400 + ((n)*4))
-#endif
+#define ATMEL_LCDC_LUT		0x0c00
 
 #endif /* __ATMEL_LCDC_H__ */
