@@ -92,6 +92,7 @@ obj-$(CONFIG_FB_SA1100)           += sa1100fb.o
 obj-$(CONFIG_FB_HIT)              += hitfb.o
 obj-$(CONFIG_FB_EPSON1355)	  += epson1355fb.o
 obj-$(CONFIG_FB_ATMEL)		  += atmel_lcdfb.o atmel_lcdfb_core.o
+obj-$(CONFIG_FB_ATMEL_HLCD)	  += atmel_hlcdfb.o atmel_lcdfb_core.o
 obj-$(CONFIG_FB_PVR2)             += pvr2fb.o
 obj-$(CONFIG_FB_VOODOO1)          += sstfb.o
 obj-$(CONFIG_FB_ARMCLCD)	  += amba-clcd.o

@@ -90,6 +90,10 @@ static inline void atmel_lcdfb_free_video_memory(struct atmel_lcdfb_info *sinfo)
 
 	dma_free_writecombine(info->device, info->fix.smem_len,
 				info->screen_base, info->fix.smem_start);
+
+	if (sinfo->dev_data->dma_desc_size && sinfo->dma_desc)
+		dma_free_writecombine(info->device, sinfo->dev_data->dma_desc_size,
+						sinfo->dma_desc, sinfo->dma_desc_phys);
 }
 
 /**
@@ -118,6 +122,17 @@ static int atmel_lcdfb_alloc_video_memory(struct atmel_lcdfb_info *sinfo)
 
 	memset(info->screen_base, 0, info->fix.smem_len);
 
+	if (sinfo->dev_data->dma_desc_size) {
+		sinfo->dma_desc = dma_alloc_writecombine(info->device,
+					sinfo->dev_data->dma_desc_size,
+					&(sinfo->dma_desc_phys), GFP_KERNEL);
+
+		if (!sinfo->dma_desc) {
+			dma_free_writecombine(info->device, info->fix.smem_len,
+						info->screen_base, info->fix.smem_start);
+			return -ENOMEM;
+		}
+	}
 	return 0;
 }
 

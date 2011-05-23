@@ -1022,6 +1022,15 @@ config FB_ATMEL_STN
 
 	  If unsure, say N.
 
+config FB_ATMEL_HLCD
+	tristate "AT91 HLCD Controller support"
+	depends on FB && HAVE_FB_ATMEL
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	help
+	  This enables support for the AT91 HLCD Controller.
+
 config FB_NVIDIA
 	tristate "nVidia Framebuffer Support"
 	depends on FB && PCI
