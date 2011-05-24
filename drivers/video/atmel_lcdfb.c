@@ -734,7 +734,7 @@ static int atmel_lcdfb_setup_9x5_core(struct fb_info *info)
 	lcdc_writel(sinfo, ATMEL_LCDC_BASEIDR, ~0UL);
 	/* Enable BASE LAYER overflow interrupts, if want to enable DMA interrupt, also need set it at LCDC_BASECTRL reg */
 	lcdc_writel(sinfo, ATMEL_LCDC_BASEIER, LCDC_BASEIER_OVR);
-	lcdc_writel(sinfo, ATMEL_LCDC_LCDIER, LCDC_LCDIER_FIFOERRIE | LCDC_LCDIER_BASEIE);
+	lcdc_writel(sinfo, ATMEL_LCDC_LCDIER, LCDC_LCDIER_FIFOERRIE | LCDC_LCDIER_BASEIE | LCDC_LCDIER_HEOIE);
 
 	return 0;
 }
@@ -1066,7 +1066,8 @@ static irqreturn_t atmel_lcdfb_interrupt(int irq, void *dev_id)
 				dev_warn(info->device, "base layer overflow %#x\n",
 							baselayer_status);
 
-		}
+		} else
+			return IRQ_NONE;
 	} else {
 		status = lcdc_readl(sinfo, ATMEL_LCDC_ISR);
 		if (status & ATMEL_LCDC_UFLWI) {
@@ -1266,7 +1267,7 @@ static int __init atmel_lcdfb_probe(struct platform_device *pdev)
 	init_contrast(sinfo);
 
 	/* interrupt */
-	ret = request_irq(sinfo->irq_base, atmel_lcdfb_interrupt, 0, pdev->name, info);
+	ret = request_irq(sinfo->irq_base, atmel_lcdfb_interrupt, IRQF_SHARED, pdev->name, info);
 	if (ret) {
 		dev_err(dev, "request_irq failed: %d\n", ret);
 		goto unmap_mmio;

@@ -81,6 +81,14 @@ menuconfig VIDEO_CAPTURE_DRIVERS
 
 if VIDEO_CAPTURE_DRIVERS && VIDEO_V4L2
 
+config VIDEO_AT91SAM9X5
+	tristate "Support for AT91SAM9X5 Video"
+	depends on ARCH_AT91SAM9X5
+	depends on VIDEO_V4L2
+	select VIDEOBUF2_DMA_CONTIG
+	help
+	  support for the "High End Overlay" found in Atmel's AT91SAM9X5 SoCs.
+
 config VIDEO_ADV_DEBUG
 	bool "Enable advanced debug functionality"
 	default n
