@@ -18,10 +18,11 @@
 #include <linux/i2c-gpio.h>
 
 #include <linux/fb.h>
-#include <video/atmel_lcdc.h>
+#include <video/atmel_lcdfb.h>
 
 #include <mach/board.h>
 #include <mach/gpio.h>
+#include <mach/atmel_lcdc.h>
 #include <mach/at91sam9261.h>
 #include <mach/at91sam9261_matrix.h>
 #include <mach/at91sam9_smc.h>

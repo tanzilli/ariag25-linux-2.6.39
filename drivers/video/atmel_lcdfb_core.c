@@ -22,7 +22,7 @@
 #include <mach/cpu.h>
 #include <mach/gpio.h>
 
-#include <video/atmel_lcdc.h>
+#include <video/atmel_lcdfb.h>
 
 /* configurable parameters */
 #define ATMEL_LCDC_CVAL_DEFAULT		0xc8

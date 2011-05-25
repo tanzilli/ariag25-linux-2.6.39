@@ -19,11 +19,12 @@
 #include <linux/platform_device.h>
 #include <linux/i2c-gpio.h>
 
-#include <video/atmel_lcdc.h>
+#include <video/atmel_lcdfb.h>
 
 #include <mach/board.h>
 #include <mach/cpu.h>
 #include <mach/gpio.h>
+#include <mach/atmel_lcdc.h>
 #include <mach/at91cap9.h>
 #include <mach/at91cap9_matrix.h>
 #include <mach/at91sam9_smc.h>

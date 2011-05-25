@@ -19,8 +19,9 @@
 
 #include <mach/board.h>
 #include <mach/cpu.h>
+#include <mach/atmel_lcdc.h>
 
-#include <video/atmel_lcdc.h>
+#include <video/atmel_lcdfb.h>
 
 /* configurable parameters */
 #define ATMEL_LCDC_CVAL_DEFAULT		0xc8
