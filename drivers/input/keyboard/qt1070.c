@@ -216,7 +216,7 @@ static int __devinit qt1070_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, data);
 
-	/* Read to clear the chang line */
+	/* Read to clear the CHANGE line */
 	qt1070_read(client, DET_STATUS);
 
 	return 0;
