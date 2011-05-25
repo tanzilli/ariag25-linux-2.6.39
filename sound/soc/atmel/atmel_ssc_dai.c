@@ -631,12 +631,10 @@ static int atmel_ssc_prepare(struct snd_pcm_substream *substream,
 #ifdef CONFIG_PM
 static int atmel_ssc_suspend(struct snd_soc_dai *cpu_dai)
 {
-	struct atmel_ssc_info *ssc_p;
+	struct atmel_ssc_info *ssc_p = &ssc_info[cpu_dai->id];
 
 	if (!cpu_dai->active)
-		return 0;
-
-	ssc_p = &ssc_info[cpu_dai->id];
+		goto out;
 
 	/* Save the status register before disabling transmit and receive */
 	ssc_p->ssc_state.ssc_sr = ssc_readl(ssc_p->ssc->regs, SR);
@@ -652,6 +650,11 @@ static int atmel_ssc_suspend(struct snd_soc_dai *cpu_dai)
 	ssc_p->ssc_state.ssc_tcmr = ssc_readl(ssc_p->ssc->regs, TCMR);
 	ssc_p->ssc_state.ssc_tfmr = ssc_readl(ssc_p->ssc->regs, TFMR);
 
+out:
+	if (ssc_p->initialized) {
+		pr_debug("atmel_ssc_dai: suspend - stop clock\n");
+		clk_disable(ssc_p->ssc->clk);
+	}
 	return 0;
 }
 
@@ -659,13 +662,16 @@ static int atmel_ssc_suspend(struct snd_soc_dai *cpu_dai)
 
 static int atmel_ssc_resume(struct snd_soc_dai *cpu_dai)
 {
-	struct atmel_ssc_info *ssc_p;
+	struct atmel_ssc_info *ssc_p = &ssc_info[cpu_dai->id];
 	u32 cr;
+
+	if (ssc_p->initialized) {
+		pr_debug("atmel_ssc_dai: resume - restart clock\n");
+		clk_enable(ssc_p->ssc->clk);
+	}
 
 	if (!cpu_dai->active)
 		return 0;
-
-	ssc_p = &ssc_info[cpu_dai->id];
 
 	/* restore SSC register settings */
 	ssc_writel(ssc_p->ssc->regs, TFMR, ssc_p->ssc_state.ssc_tfmr);
