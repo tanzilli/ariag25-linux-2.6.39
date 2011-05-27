@@ -133,7 +133,7 @@
 
 #define CONFIG_DRAM_BASE	AT91_CHIPSELECT_1
 
-#define CONSISTENT_DMA_SIZE	SZ_4M
+#define CONSISTENT_DMA_SIZE	(14 * SZ_1M)
 
 /*
  * DMA0 peripheral identifiers
