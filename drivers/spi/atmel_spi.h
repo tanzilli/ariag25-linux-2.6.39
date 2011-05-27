@@ -23,6 +23,7 @@
 #define SPI_CSR1				0x0034
 #define SPI_CSR2				0x0038
 #define SPI_CSR3				0x003c
+#define SPI_VERSION				0x00fc
 #define SPI_RPR					0x0100
 #define SPI_RCR					0x0104
 #define SPI_TPR					0x0108
@@ -55,6 +56,8 @@
 #define SPI_FDIV_SIZE				1
 #define SPI_MODFDIS_OFFSET			4
 #define SPI_MODFDIS_SIZE			1
+#define SPI_WDRBT_OFFSET			5
+#define SPI_WDRBT_SIZE				1
 #define SPI_LLB_OFFSET				7
 #define SPI_LLB_SIZE				1
 #define SPI_PCS_OFFSET				16
@@ -109,6 +112,12 @@
 #define SPI_DLYBS_SIZE				8
 #define SPI_DLYBCT_OFFSET			24
 #define SPI_DLYBCT_SIZE				8
+
+/* Bitfields in VERSION */
+#define SPI_VERS_OFFSET				0
+#define SPI_VERS_SIZE				12
+#define SPI_MFN_OFFSET				16
+#define SPI_MFN_SIZE				3
 
 /* Bitfields in RCR */
 #define SPI_RXCTR_OFFSET			0

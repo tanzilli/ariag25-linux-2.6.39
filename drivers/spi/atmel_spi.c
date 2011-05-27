@@ -106,6 +106,15 @@ static bool atmel_spi_is_v2(void)
 	return !cpu_is_at91rm9200();
 }
 
+static bool atmel_spi_v21x(struct atmel_spi *as)
+{
+	u32 v;
+
+	v = SPI_BFEXT(VERS, spi_readl(as, VERSION));
+	v &= 0x0ff0;
+	return (v == 0x210);
+}
+
 /*
  * Earlier SPI controllers (e.g. on at91rm9200) have a design bug whereby
  * they assume that spi slave device state will not change on deselect, so
@@ -137,6 +146,7 @@ static void cs_activate(struct atmel_spi *as, struct spi_device *spi)
 	unsigned active = spi->mode & SPI_CS_HIGH;
 	u32 mr;
 
+	mr = spi_readl(as, MR);
 	if (atmel_spi_is_v2()) {
 		/*
 		 * Always use CSR0. This ensures that the clock
@@ -144,9 +154,9 @@ static void cs_activate(struct atmel_spi *as, struct spi_device *spi)
 		 * toggle the CS.
 		 */
 		spi_writel(as, CSR0, asd->csr);
-		spi_writel(as, MR, SPI_BF(PCS, 0x0e) | SPI_BIT(MODFDIS)
-				| SPI_BIT(MSTR));
-		mr = spi_readl(as, MR);
+		mr &= (SPI_BIT(MODFDIS) | SPI_BIT(MSTR) | SPI_BIT(WDRBT));
+		mr |= SPI_BF(PCS, 0x0e);
+		spi_writel(as, MR, mr);
 		gpio_set_value(asd->npcs_pin, active);
 	} else {
 		u32 cpol = (spi->mode & SPI_CPOL) ? SPI_BIT(CPOL) : 0;
@@ -161,7 +171,6 @@ static void cs_activate(struct atmel_spi *as, struct spi_device *spi)
 						csr ^ SPI_BIT(CPOL));
 		}
 
-		mr = spi_readl(as, MR);
 		mr = SPI_BFINS(PCS, ~(1 << spi->chip_select), mr);
 		if (spi->chip_select != 0)
 			gpio_set_value(asd->npcs_pin, active);
@@ -1224,6 +1233,7 @@ static int __init atmel_spi_probe(struct platform_device *pdev)
 	int			irq;
 	struct clk		*clk;
 	int			ret;
+	u32			mr;
 	struct spi_master	*master;
 	struct atmel_spi	*as;
 
@@ -1286,7 +1296,11 @@ static int __init atmel_spi_probe(struct platform_device *pdev)
 	clk_enable(clk);
 	spi_writel(as, CR, SPI_BIT(SWRST));
 	spi_writel(as, CR, SPI_BIT(SWRST)); /* AT91SAM9263 Rev B workaround */
-	spi_writel(as, MR, SPI_BIT(MSTR) | SPI_BIT(MODFDIS));
+	mr = SPI_BIT(MSTR) | SPI_BIT(MODFDIS);
+	if (atmel_spi_v21x(as))
+		mr |= SPI_BIT(WDRBT); /* Prevent overrun errors */
+	spi_writel(as, MR, mr);
+
 
 	ret = atmel_spi_configure_dma(master);
 	if (ret)
