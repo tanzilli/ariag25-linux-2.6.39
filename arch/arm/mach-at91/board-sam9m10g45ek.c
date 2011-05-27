@@ -25,9 +25,12 @@
 #include <linux/leds.h>
 #include <linux/clk.h>
 #include <linux/atmel-mci.h>
+#include <linux/delay.h>
 
 #include <mach/hardware.h>
 #include <video/atmel_lcdfb.h>
+#include <media/soc_camera.h>
+#include <media/atmel-isi.h>
 
 #include <asm/setup.h>
 #include <asm/mach-types.h>
@@ -195,6 +198,95 @@ static void __init ek_add_device_nand(void)
 	at91_add_device_nand(&ek_nand_data);
 }
 
+/*
+ *  ISI
+ */
+#if defined(CONFIG_VIDEO_ATMEL_ISI) || defined(CONFIG_VIDEO_ATMEL_ISI_MODULE)
+static struct isi_platform_data __initdata isi_data = {
+	.frate		= ISI_CFG1_FRATE_CAPTURE_ALL,
+	.has_emb_sync	= 0,
+	.emb_crc_sync = 0,
+	.hsync_act_low = 0,
+	.vsync_act_low = 0,
+	.pclk_act_falling = 0,
+	/* to use codec and preview path simultaneously */
+	.isi_full_mode = 1,
+	.data_width_flags = ISI_DATAWIDTH_8 | ISI_DATAWIDTH_10,
+};
+
+static void __init isi_set_clk(void)
+{
+	struct clk *pck1;
+	struct clk *plla;
+
+	pck1 = clk_get(NULL, "pck1");
+	plla = clk_get(NULL, "plla");
+
+	clk_set_parent(pck1, plla);
+	clk_set_rate(pck1, 25000000);
+	clk_enable(pck1);
+}
+#else
+static void __init isi_set_clk(void) {}
+
+static struct isi_platform_data __initdata isi_data;
+#endif
+
+/*
+ * soc-camera OV2640
+ */
+#if defined(CONFIG_SOC_CAMERA_OV2640)
+static unsigned long isi_camera_query_bus_param(struct soc_camera_link *link)
+{
+	/* ISI board for ek using default 8-bits connection */
+	return SOCAM_DATAWIDTH_8;
+}
+
+static int i2c_camera_power(struct device *dev, int on)
+{
+	/* enable or disable the camera */
+	pr_debug("%s: %s the camera\n", __func__, on ? "ENABLE" : "DISABLE");
+	at91_set_gpio_output(AT91_PIN_PD13, on ? 0 : 1);
+
+	if (!on)
+		goto out;
+
+	/* If enabled, give a reset impulse */
+	at91_set_gpio_output(AT91_PIN_PD12, 0);
+	msleep(20);
+	at91_set_gpio_output(AT91_PIN_PD12, 1);
+	msleep(100);
+
+out:
+	return 0;
+}
+
+static struct i2c_board_info i2c_camera = {
+	I2C_BOARD_INFO("ov2640", 0x30),
+};
+
+static struct soc_camera_link iclink_ov2640 = {
+	.bus_id		= 0,
+	.board_info	= &i2c_camera,
+	.i2c_adapter_id	= 0,
+	.power		= i2c_camera_power,
+	.query_bus_param	= isi_camera_query_bus_param,
+};
+
+static struct platform_device isi_ov2640 = {
+	.name	= "soc-camera-pdrv",
+	.id	= 0,
+	.dev	= {
+		.platform_data = &iclink_ov2640,
+	},
+};
+
+static struct platform_device *devices[] __initdata = {
+	&isi_ov2640,
+};
+#else
+static struct platform_device *devices[] __initdata = {};
+#endif
 
 /*
  * LCD Controller
@@ -410,6 +502,11 @@ static void __init ek_board_init(void)
 	ek_add_device_nand();
 	/* I2C */
 	at91_add_device_i2c(0, NULL, 0);
+	/* ISI */
+	platform_add_devices(devices, ARRAY_SIZE(devices));
+	isi_set_clk();
+	at91_add_device_isi(&isi_data);
+
 	/* LCD Controller */
 	at91_add_device_lcdc(&ek_lcdc_data);
 	/* Touch Screen */

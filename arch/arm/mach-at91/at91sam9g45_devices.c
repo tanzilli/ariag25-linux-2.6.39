@@ -29,6 +29,8 @@
 #include <mach/at_hdmac.h>
 #include <mach/atmel-mci.h>
 
+#include <media/atmel-isi.h>
+
 #include "generic.h"
 
 
@@ -871,6 +873,70 @@ void __init at91_add_device_ac97(struct ac97c_platform_data *data)
 }
 #else
 void __init at91_add_device_ac97(struct ac97c_platform_data *data) {}
+#endif
+
+/* --------------------------------------------------------------------
+ *  Image Sensor Interface
+ * -------------------------------------------------------------------- */
+#if defined(CONFIG_VIDEO_ATMEL_ISI) || defined(CONFIG_VIDEO_ATMEL_ISI_MODULE)
+static u64 isi_dmamask = DMA_BIT_MASK(32);
+static struct isi_platform_data isi_data;
+
+struct resource isi_resources[] = {
+	[0] = {
+		.start	= AT91SAM9G45_BASE_ISI,
+		.end	= AT91SAM9G45_BASE_ISI + SZ_16K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	[1] = {
+		.start	= AT91SAM9G45_ID_ISI,
+		.end	= AT91SAM9G45_ID_ISI,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device at91sam9g45_isi_device = {
+	.name		= "atmel_isi",
+	.id		= 0,
+	.dev		= {
+			.dma_mask		= &isi_dmamask,
+			.coherent_dma_mask	= DMA_BIT_MASK(32),
+			.platform_data		= &isi_data,
+	},
+	.resource	= isi_resources,
+	.num_resources	= ARRAY_SIZE(isi_resources),
+};
+
+void __init at91_add_device_isi(struct isi_platform_data * data)
+{
+	struct platform_device *pdev;
+
+	if (!data)
+		return;
+	isi_data = *data;
+
+	at91_set_A_periph(AT91_PIN_PB20, 0);	/* ISI_D0 */
+	at91_set_A_periph(AT91_PIN_PB21, 0);	/* ISI_D1 */
+	at91_set_A_periph(AT91_PIN_PB22, 0);	/* ISI_D2 */
+	at91_set_A_periph(AT91_PIN_PB23, 0);	/* ISI_D3 */
+	at91_set_A_periph(AT91_PIN_PB24, 0);	/* ISI_D4 */
+	at91_set_A_periph(AT91_PIN_PB25, 0);	/* ISI_D5 */
+	at91_set_A_periph(AT91_PIN_PB26, 0);	/* ISI_D6 */
+	at91_set_A_periph(AT91_PIN_PB27, 0);	/* ISI_D7 */
+	at91_set_A_periph(AT91_PIN_PB28, 0);	/* ISI_PCK */
+	at91_set_A_periph(AT91_PIN_PB30, 0);	/* ISI_HSYNC */
+	at91_set_A_periph(AT91_PIN_PB29, 0);	/* ISI_VSYNC */
+	at91_set_B_periph(AT91_PIN_PB31, 0);	/* ISI_MCK (PCK1) */
+	at91_set_B_periph(AT91_PIN_PB8, 0);	/* ISI_PD8 */
+	at91_set_B_periph(AT91_PIN_PB9, 0);	/* ISI_PD9 */
+	at91_set_B_periph(AT91_PIN_PB10, 0);	/* ISI_PD10 */
+	at91_set_B_periph(AT91_PIN_PB11, 0);	/* ISI_PD11 */
+
+	pdev = &at91sam9g45_isi_device;
+	platform_device_register(pdev);
+}
+#else
+void __init at91_add_device_isi(struct isi_platform_data * data) { }
 #endif
 
 
