@@ -1010,29 +1010,59 @@ void __init at91_add_device_can(int id, struct at91_can_data *data) {}
 static u64 lcdc_dmamask = DMA_BIT_MASK(32);
 static struct atmel_lcdfb_info lcdc_data;
 
-static struct resource lcdc_resources[] = {
+static struct resource lcdc_base_resources[] = {
 	[0] = {
 		.start	= AT91SAM9X5_BASE_LCDC,
-		.end	= AT91SAM9X5_BASE_LCDC + SZ_16K - 1,
+		.end	= AT91SAM9X5_BASE_LCDC + 0xff,
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
+		.start	= AT91SAM9X5_BASE_LCDC + ATMEL_LCDC_BASECLUT,
+		.end	= AT91SAM9X5_BASE_LCDC + ATMEL_LCDC_BASECLUT + SZ_1K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	[2] = {
 		.start	= AT91SAM9X5_ID_LCDC,
 		.end	= AT91SAM9X5_ID_LCDC,
 		.flags	= IORESOURCE_IRQ,
 	},
 };
 
-static struct platform_device at91_lcdc_device = {
-	.name		= "atmel_hlcdfb",
+static struct platform_device at91_lcdc_base_device = {
+	.name		= "atmel_hlcdfb_base",
 	.id		= 0,
 	.dev		= {
 				.dma_mask		= &lcdc_dmamask,
 				.coherent_dma_mask	= DMA_BIT_MASK(32),
 				.platform_data		= &lcdc_data,
 	},
-	.resource	= lcdc_resources,
-	.num_resources	= ARRAY_SIZE(lcdc_resources),
+	.resource	= lcdc_base_resources,
+	.num_resources	= ARRAY_SIZE(lcdc_base_resources),
+};
+
+static struct resource lcdc_ovl1_resources[] = {
+	[0] = {
+		.start	= AT91SAM9X5_BASE_LCDC + 0x100,
+		.end	= AT91SAM9X5_BASE_LCDC + 0x27f,
+		.flags	= IORESOURCE_MEM,
+	},
+	[1] = {
+		.start	= AT91SAM9X5_BASE_LCDC + ATMEL_LCDC_OVR1CLUT,
+		.end	= AT91SAM9X5_BASE_LCDC + ATMEL_LCDC_OVR1CLUT + SZ_1K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+static struct platform_device at91_lcdc_ovl_device = {
+	.name		= "atmel_hlcdfb_ovl",
+	.id		= 0,
+	.dev		= {
+				.dma_mask		= &lcdc_dmamask,
+				.coherent_dma_mask	= DMA_BIT_MASK(32),
+				.platform_data		= &lcdc_data,
+	},
+	.resource	= lcdc_ovl1_resources,
+	.num_resources	= ARRAY_SIZE(lcdc_ovl1_resources),
 };
 
 void __init at91_add_device_lcdc(struct atmel_lcdfb_info *data)
@@ -1075,7 +1105,8 @@ void __init at91_add_device_lcdc(struct atmel_lcdfb_info *data)
 	at91_set_A_periph(AT91_PIN_PC23, 0);	/* LCDD23 */
 
 	lcdc_data = *data;
-	platform_device_register(&at91_lcdc_device);
+	platform_device_register(&at91_lcdc_base_device);
+	platform_device_register(&at91_lcdc_ovl_device);
 }
 #else
 void __init at91_add_device_lcdc(struct atmel_lcdfb_info *data) {}
