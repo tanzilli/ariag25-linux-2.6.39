@@ -48,7 +48,6 @@ struct atmel_lcdfb_devdata {
 	void (*limit_screeninfo)(struct fb_var_screeninfo *var);
 	const struct backlight_ops *bl_ops;
 	int fbinfo_flags;
-	u32 lut_base;
 	int dma_desc_size;
 };
 
@@ -63,6 +62,7 @@ struct atmel_lcdfb_info {
 	spinlock_t		lock;
 	struct fb_info		*info;
 	void __iomem		*mmio;
+	void __iomem		*clut;
 	int			irq_base;
 	struct atmel_lcdfb_devdata *dev_data;
 	struct work_struct	task;

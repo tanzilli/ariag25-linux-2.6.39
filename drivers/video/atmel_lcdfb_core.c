@@ -426,9 +426,7 @@ static int atmel_lcdfb_setcolreg(unsigned int regno, unsigned int red,
 			 * TODO: intensity bit. Maybe something like
 			 *   ~(red[10] ^ green[10] ^ blue[10]) & 1
 			 */
-
-			lcdc_writel(sinfo, sinfo->dev_data->lut_base + regno * 4,
-					val);
+			writel(val, sinfo->clut + regno * 4);
 			ret = 0;
 		}
 		break;
@@ -436,8 +434,7 @@ static int atmel_lcdfb_setcolreg(unsigned int regno, unsigned int red,
 	case FB_VISUAL_MONO01:
 		if (regno < 2) {
 			val = (regno == 0) ? 0x00 : 0x1F;
-			lcdc_writel(sinfo, sinfo->dev_data->lut_base + regno * 4,
-					val);
+			writel(val, sinfo->clut + regno * 4);
 			ret = 0;
 		}
 		break;
@@ -553,7 +550,7 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 	struct atmel_lcdfb_info *sinfo;
 	struct atmel_lcdfb_info *pdata_sinfo;
 	struct fb_videomode fbmode;
-	struct resource *regs = NULL;
+	struct resource *regs = NULL, *clut = NULL;
 	struct resource *map = NULL;
 	int ret;
 
@@ -628,11 +625,19 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 		goto stop_clk;
 	}
 
+	clut = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!clut) {
+		dev_err(dev, "clut resources unusable\n");
+		ret = -ENXIO;
+		goto stop_clk;
+	}
+
 	/* No error checking, some devices can do without IRQ */
 	sinfo->irq_base = platform_get_irq(pdev, 0);
 
 	/* Initialize video memory */
-	map = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	//FIXME: Fix LUTs for old platforms
+	map = platform_get_resource(pdev, IORESOURCE_MEM, 2);
 	if (map) {
 		/* use a pre-allocated memory buffer */
 		info->fix.smem_start = map->start;
@@ -676,6 +681,17 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 		goto release_mem;
 	}
 
+	//FIXME: proper request_region and cleanup
+	if (!request_mem_region(clut->start, resource_size(clut), pdev->name)) {
+		ret = -EBUSY;
+		goto unmap_mmio;
+	}
+	sinfo->clut = ioremap(clut->start, resource_size(clut));
+	if (!sinfo->clut) {
+		dev_err(dev, "cannot map CLUT\n");
+		goto unmap_mmio;
+	}
+
 	/* Initialize PWM for contrast or backlight ("off") */
 	if (sinfo->dev_data->init_contrast)
 		sinfo->dev_data->init_contrast(sinfo);
@@ -688,7 +704,7 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 				IRQF_SHARED, pdev->name, info);
 		if (ret) {
 			dev_err(dev, "request_irq failed: %d\n", ret);
-			goto unmap_mmio;
+			goto clear_backlight;
 		}
 	}
 
@@ -746,8 +762,9 @@ unregister_irqs:
 	cancel_work_sync(&sinfo->task);
 	if (sinfo->irq_base >= 0)
 		free_irq(sinfo->irq_base, info);
-unmap_mmio:
+clear_backlight:
 	exit_backlight(sinfo);
+unmap_mmio:
 	iounmap(sinfo->mmio);
 release_mem:
  	release_mem_region(info->fix.mmio_start, info->fix.mmio_len);

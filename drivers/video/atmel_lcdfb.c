@@ -399,7 +399,6 @@ static struct atmel_lcdfb_devdata dev_data = {
 	.init_contrast = atmel_lcdfb_init_contrast,
 	.limit_screeninfo = atmelfb_limit_screeninfo,
 	.fbinfo_flags = ATMEL_LCDFB_FBINFO_DEFAULT,
-	.lut_base = ATMEL_LCDC_LUT,
 };
 
 static int __init atmel_lcdfb_probe(struct platform_device *pdev)

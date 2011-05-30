@@ -454,7 +454,6 @@ static struct atmel_lcdfb_devdata dev_data_base = {
 	.init_contrast = atmel_hlcdfb_init_contrast,
 	.limit_screeninfo = atmelfb_limit_screeninfo,
 	.fbinfo_flags = ATMEL_LCDFB_FBINFO_DEFAULT,
-	.lut_base = ATMEL_HLCDC_LUT,
 	.dma_desc_size = sizeof(struct atmel_hlcd_dma_desc),
 };
 
@@ -463,7 +462,6 @@ static struct atmel_lcdfb_devdata dev_data_ovl = {
 	.update_dma = atmel_hlcdfb_update_dma_ovl,
 	.limit_screeninfo = atmelfb_limit_screeninfo,
 	.fbinfo_flags = ATMEL_LCDFB_FBINFO_DEFAULT,
-	.lut_base = 0x800, //FIXME: add define
 	.dma_desc_size = sizeof(struct atmel_hlcd_dma_desc),
 };
 
