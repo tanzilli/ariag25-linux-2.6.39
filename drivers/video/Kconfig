@@ -8,6 +8,9 @@ menu "Graphics support"
 config HAVE_FB_ATMEL
 	bool
 
+config FB_ATMEL_HLCD
+	bool
+
 config HAVE_FB_IMX
 	bool
 
@@ -1002,6 +1005,7 @@ config FB_ATMEL
 	select FB_CFB_FILLRECT
 	select FB_CFB_COPYAREA
 	select FB_CFB_IMAGEBLIT
+	select FB_ATMEL_HLCD if ARCH_AT91SAM9X5
 	help
 	  This enables support for the AT91/AT32 LCD Controller.
 
@@ -1021,15 +1025,6 @@ config FB_ATMEL_STN
 	  Controller. Say N if you want to connect a TFT.
 
 	  If unsure, say N.
-
-config FB_ATMEL_HLCD
-	tristate "AT91 HLCD Controller support"
-	depends on FB && HAVE_FB_ATMEL
-	select FB_CFB_FILLRECT
-	select FB_CFB_COPYAREA
-	select FB_CFB_IMAGEBLIT
-	help
-	  This enables support for the AT91 HLCD Controller.
 
 config FB_NVIDIA
 	tristate "nVidia Framebuffer Support"
