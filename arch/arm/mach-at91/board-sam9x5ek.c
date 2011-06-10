@@ -433,7 +433,7 @@ static void __init ek_board_init(void)
 #endif
 
 	if (cpu_is_at91sam9x25() || cpu_is_at91sam9x35())
-		/* XXX: this conflicts with usart.1 */
+		/* this conflicts with usart.1 */
 		at91_add_device_can(1, NULL);
 
 	/* Push Buttons */
@@ -443,7 +443,6 @@ static void __init ek_board_init(void)
 	/* SSC (for WM8731) */
 	at91_add_device_ssc(AT91SAM9X5_ID_SSC, ATMEL_SSC_TX | ATMEL_SSC_RX);
 
-	/* TODO Remove: only for debugging */
 	if (ek_is_revA())
 		printk(KERN_CRIT "AT91: EK rev A\n");
 	else

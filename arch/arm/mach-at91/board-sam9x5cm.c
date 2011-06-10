@@ -228,7 +228,6 @@ void __init cm_board_init(u32 *cm_config)
 	/* LEDs */
 	at91_gpio_leds(cm_leds, ARRAY_SIZE(cm_leds));
 
-	/* TODO Remove: only for debugging */
 	if (cm_is_revA())
 		printk(KERN_CRIT "AT91: CM rev A\n");
 	else
