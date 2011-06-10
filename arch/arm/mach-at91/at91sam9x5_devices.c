@@ -30,6 +30,8 @@
 #include <mach/at_hdmac.h>
 #include <mach/atmel-mci.h>
 
+#include <media/atmel-isi.h>
+
 #include "generic.h"
 
 /* --------------------------------------------------------------------
@@ -931,6 +933,71 @@ void __init at91_add_device_spi(struct spi_board_info *devices, int nr_devices)
 void __init at91_add_device_spi(struct spi_board_info *devices, int nr_devices) {}
 #endif
 
+/* --------------------------------------------------------------------
+ *  Image Sensor Interface
+ * -------------------------------------------------------------------- */
+
+#if defined(CONFIG_VIDEO_ATMEL_ISI) || defined(CONFIG_VIDEO_ATMEL_ISI_MODULE)
+static u64 isi_dmamask = DMA_BIT_MASK(32);
+static struct isi_platform_data isi_data;
+
+struct resource isi_resources[] = {
+	[0] = {
+		.start	= AT91SAM9X5_BASE_ISI,
+		.end	= AT91SAM9X5_BASE_ISI + SZ_16K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	[1] = {
+		.start	= AT91SAM9X5_ID_ISI,
+		.end	= AT91SAM9X5_ID_ISI,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device at91sam9x5_isi_device = {
+	.name		= "atmel_isi",
+	.id		= 0,
+	.dev		= {
+			.dma_mask		= &isi_dmamask,
+			.coherent_dma_mask	= DMA_BIT_MASK(32),
+			.platform_data		= &isi_data,
+	},
+	.resource	= isi_resources,
+	.num_resources	= ARRAY_SIZE(isi_resources),
+};
+
+void __init at91_add_device_isi(struct isi_platform_data *data)
+{
+	struct platform_device *pdev;
+
+	if (!data)
+		return;
+
+	at91_set_B_periph(AT91_PIN_PC0, 0);	/* ISI_D0 */
+	at91_set_B_periph(AT91_PIN_PC1, 0);	/* ISI_D1 */
+	at91_set_B_periph(AT91_PIN_PC2, 0);	/* ISI_D2 */
+	at91_set_B_periph(AT91_PIN_PC3, 0);	/* ISI_D3 */
+	at91_set_B_periph(AT91_PIN_PC4, 0);	/* ISI_D4 */
+	at91_set_B_periph(AT91_PIN_PC5, 0);	/* ISI_D5 */
+	at91_set_B_periph(AT91_PIN_PC6, 0);	/* ISI_D6 */
+	at91_set_B_periph(AT91_PIN_PC7, 0);	/* ISI_D7 */
+	at91_set_B_periph(AT91_PIN_PC12, 0);	/* ISI_PCK */
+	at91_set_B_periph(AT91_PIN_PC14, 0);	/* ISI_HSYNC */
+	at91_set_B_periph(AT91_PIN_PC13, 0);	/* ISI_VSYNC */
+	at91_set_C_periph(AT91_PIN_PC15, 0);	/* ISI_MCK (using PCK0 as clock) */
+	at91_set_B_periph(AT91_PIN_PC8, 0);	/* ISI_PD8 */
+	at91_set_B_periph(AT91_PIN_PC9, 0);	/* ISI_PD9 */
+	at91_set_B_periph(AT91_PIN_PC10, 0);	/* ISI_PD10 */
+	at91_set_B_periph(AT91_PIN_PC11, 0);	/* ISI_PD11 */
+
+	pdev = &at91sam9x5_isi_device;
+
+	isi_data = *data;
+	platform_device_register(pdev);
+}
+#else
+void __init at91_add_device_isi(struct isi_platform_data *data) {}
+#endif
 
 /* --------------------------------------------------------------------
  * CAN Controllers
