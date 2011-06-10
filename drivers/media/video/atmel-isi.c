@@ -868,6 +868,12 @@ static int isi_camera_set_bus_param(struct soc_camera_device *icd, u32 pixfmt)
 	return 0;
 }
 
+
+static int isi_camera_set_parm(struct soc_camera_device *icd, struct v4l2_streamparm *parm)
+{
+	return 0;
+}
+
 static struct soc_camera_host_ops isi_soc_camera_host_ops = {
 	.owner		= THIS_MODULE,
 	.add		= isi_camera_add_device,
@@ -879,6 +885,7 @@ static struct soc_camera_host_ops isi_soc_camera_host_ops = {
 	.poll		= isi_camera_poll,
 	.querycap	= isi_camera_querycap,
 	.set_bus_param	= isi_camera_set_bus_param,
+	.set_parm	= isi_camera_set_parm,
 };
 
 /* -----------------------------------------------------------------------*/
