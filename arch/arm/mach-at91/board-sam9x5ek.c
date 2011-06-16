@@ -261,13 +261,9 @@ static struct atmel_lcdfb_info __initdata ek_lcdc_data;
  */
 static struct at91_tsadcc_data ek_tsadcc_data = {
 	.adc_clock		= 300000,
-	/*
-	 * XXX: ukl: disable averaging for now at it's broken without a hardware
-	 * change
-	 */
-	.filtering_average	= 0x00,	/* averages 2^filtering_average ADC conversions */
-	.pendet_debounce	= 0x0d,
-	.pendet_sensitivity	= 0x03,
+	.filtering_average	= 0x03,	/* averages 2^filtering_average ADC conversions */
+	.pendet_debounce	= 0x08,
+	.pendet_sensitivity	= 0x02,	/* 2 = set to default */
 	.ts_sample_hold_time	= 0x0a,
 };
 
