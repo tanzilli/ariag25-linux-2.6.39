@@ -212,10 +212,10 @@ static struct fb_videomode at91_tft_vga_modes[] = {
 		.name           = "LG",
 		.refresh	= 60,
 		.xres		= 800,		.yres		= 480,
-		.pixclock	= KHZ2PICOS(22223),
+		.pixclock	= KHZ2PICOS(33260),
 
-		.left_margin	= 64,		.right_margin	= 64,
-		.upper_margin	= 22,		.lower_margin	= 21,
+		.left_margin	= 88,		.right_margin	= 168,
+		.upper_margin	= 8,		.lower_margin	= 37,
 		.hsync_len	= 128,		.vsync_len	= 2,
 
 		.sync		= 0,
