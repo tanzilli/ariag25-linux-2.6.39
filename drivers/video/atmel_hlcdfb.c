@@ -246,7 +246,7 @@ static int atmel_hlcdfb_setup_core_base(struct fb_info *info)
 	/* Set pixel clock */
 	clk_value_khz = clk_get_rate(sinfo->lcdc_clk) / 1000;
 
-	value = DIV_ROUND_UP(clk_value_khz, PICOS2KHZ(info->var.pixclock));
+	value = DIV_ROUND_CLOSEST(clk_value_khz, PICOS2KHZ(info->var.pixclock));
 
 	if (value < 1) {
 		dev_notice(info->device, "using system clock as pixel clock\n");
