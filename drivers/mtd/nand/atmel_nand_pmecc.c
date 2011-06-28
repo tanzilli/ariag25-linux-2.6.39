@@ -494,7 +494,7 @@ static void atmel_nand_pmecc_write_page(struct mtd_info *mtd,
 
 static void atmel_init_pmecc(struct mtd_info *mtd)
 {
-	uint32_t val;
+	uint32_t val = 0;
 	struct nand_chip *nand_chip = mtd->priv;
 	struct atmel_nand_host *host = nand_chip->priv;
 	struct nand_ecclayout *ecc_layout;
