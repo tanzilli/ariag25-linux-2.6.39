@@ -294,7 +294,8 @@ static void __init at91sam9x5_register_clocks(void)
 	if (cpu_is_at91sam9x25())
 		clk_register(&macb1_clk);
 
-	if (cpu_is_at91sam9x35()) {
+	if (cpu_is_at91sam9x25()
+	|| cpu_is_at91sam9x35()) {
 		clk_register(&can0_clk);
 		clk_register(&can1_clk);
 	}
