@@ -29,9 +29,6 @@
 #define LCDC_LCDCFG0_CLKPWMSEL		(0x1 << 3)
 #define LCDC_LCDCFG0_CGDISBASE		(0x1 << 8)
 #define LCDC_LCDCFG0_CGDISOVR1		(0x1 << 9)
-/* XXX: maybe this is 1 << 10? At least the LCD Interrupt registers
- * use 10 while the documentation specifies 11.
- */
 #define LCDC_LCDCFG0_CGDISHEO		(0x1 << 11)
 #define LCDC_LCDCFG0_CGDISHCR		(0x1 << 12)
 #define LCDC_LCDCFG0_CLKDIV_OFFSET	16
