@@ -183,16 +183,10 @@ static void __init cm_add_device_nand(void)
  * LEDs
  */
 static struct gpio_led cm_leds[] = {
-	{	/* "left" led, blue, userled1 */
-		.name			= "d1",
-		.gpio			= AT91_PIN_PB18,
+	{	/* Green led on Aria G25 SoM */
+		.name			= "aria_led",
+		.gpio			= AT91_PIN_PB8,
 		.default_trigger	= "heartbeat",
-	},
-	{	/* "right" led, red, userled2 */
-		.name			= "d2",
-		.gpio			= AT91_PIN_PD21,
-		.active_low		= 1,
-		.default_trigger	= "mmc0",
 	},
 };
 
