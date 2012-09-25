@@ -145,17 +145,18 @@ static struct mci_platform_data __initdata mci1_data = {
 };
 */
 
+static struct spi_board_info ariag25_spi_devices[] = {
+    {
+        .modalias    = "spidev",
+        .chip_select    = 0,
+        .max_speed_hz    = 10 * 1000 * 1000,
+        .bus_num    = 0,
+        .mode = SPI_MODE_3,
+    },
+};
 
 static void __init ek_board_configure_pins(void)
 {
-	  ek_usbh_fs_data.vbus_pin[0] = AT91_PIN_PD9;
-	  ek_usbh_hs_data.vbus_pin[0] = AT91_PIN_PD9;
-	  ek_usbh_fs_data.vbus_pin[1] = AT91_PIN_PD10;
-	  ek_usbh_hs_data.vbus_pin[1] = AT91_PIN_PD10;
-	  Port C is full-speed only
-	  ek_usbh_fs_data.vbus_pin[2] = AT91_PIN_PD11;
-	  ek_usba_udc_data.vbus_pin = AT91_PIN_PB8;
-	
 	  ek_macb0_data.phy_irq_pin = 0;
 }
 
@@ -175,6 +176,10 @@ static void __init ek_board_init(void)
 	/* Ethernet */
 	at91_add_device_eth(0, &ek_macb0_data);
 	/* at91_add_device_eth(1, &ek_macb1_data); */
+
+	/* SPI */
+	at91_add_device_spi(ariag25_spi_devices, ARRAY_SIZE(ariag25_spi_devices));
+
 	/* MMC */
 	at91_add_device_mci(0, &mci0_data);
 }
