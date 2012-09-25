@@ -449,6 +449,86 @@ void __init at91_add_device_eth(short eth_id, struct at91_eth_data *data) {}
  *  MMC / SD
  * -------------------------------------------------------------------- */
 
+
+#if defined(CONFIG_MMC_AT91) || defined(CONFIG_MMC_AT91_MODULE)
+static u64 mmc_dmamask = DMA_BIT_MASK(32);
+static struct at91_mmc_data mmc_data;
+
+static struct resource mmc_resources[] = {
+	[0] = {
+		.start	= AT91SAM9X5_BASE_MCI0,
+		.end	= AT91SAM9X5_BASE_MCI0 + SZ_16K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	[1] = {
+		.start	= AT91SAM9X5_ID_MCI0,
+		.end	= AT91SAM9X5_ID_MCI0,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device at91sam9260_mmc_device = {
+	.name		= "at91_mci",
+	.id		= -1,
+	.dev		= {
+				.dma_mask		= &mmc_dmamask,
+				.coherent_dma_mask	= DMA_BIT_MASK(32),
+				.platform_data		= &mmc_data,
+	},
+	.resource	= mmc_resources,
+	.num_resources	= ARRAY_SIZE(mmc_resources),
+};
+
+void __init at91_add_device_mmc(short mmc_id, struct at91_mmc_data *data)
+{
+	if (!data)
+		return;
+
+	/* input/irq */
+	if (data->det_pin) {
+		at91_set_gpio_input(data->det_pin, 1);
+		at91_set_deglitch(data->det_pin, 1);
+	}
+	if (data->wp_pin)
+		at91_set_gpio_input(data->wp_pin, 1);
+	if (data->vcc_pin)
+		at91_set_gpio_output(data->vcc_pin, 0);
+
+	/* CLK */
+	at91_set_A_periph(AT91_PIN_PA17, 0);
+
+	if (data->slot_b) {
+		/* CMD */
+		at91_set_B_periph(AT91_PIN_PA16, 1);
+
+		/* DAT0, maybe DAT1..DAT3 */
+		at91_set_B_periph(AT91_PIN_PA15, 1);
+		if (data->wire4) {
+			at91_set_B_periph(AT91_PIN_PA18, 1);
+			at91_set_B_periph(AT91_PIN_PA19, 1);
+			at91_set_B_periph(AT91_PIN_PA20, 1);
+		}
+	} else {
+		/* CMD */
+		at91_set_A_periph(AT91_PIN_PA16, 1);
+
+		/* DAT0, maybe DAT1..DAT3 */
+		at91_set_A_periph(AT91_PIN_PA15, 1);
+		if (data->wire4) {
+			at91_set_A_periph(AT91_PIN_PA18, 1);
+			at91_set_A_periph(AT91_PIN_PA19, 1);
+			at91_set_A_periph(AT91_PIN_PA20, 1);
+		}
+	}
+
+	mmc_data = *data;
+	platform_device_register(&at91sam9260_mmc_device);
+}
+#else
+void __init at91_add_device_mmc(short mmc_id, struct at91_mmc_data *data) {}
+#endif
+
+
 #if defined(CONFIG_MMC_ATMELMCI) || defined(CONFIG_MMC_ATMELMCI_MODULE)
 static u64 mmc_dmamask = DMA_BIT_MASK(32);
 static struct mci_platform_data mmc0_data, mmc1_data;
