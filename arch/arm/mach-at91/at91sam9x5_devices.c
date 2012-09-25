@@ -1926,9 +1926,37 @@ void __init at91_add_device_serial(void)
 
 				atslave->reg_width = DW_DMA_SLAVE_WIDTH_8BIT;
 				atslave->cfg = ATC_FIFOCFG_HALFFIFO
-						| ATC_SRC_H2SEL_SW | ATC_DST_H2SEL_HW
-						| (AT_DMA_ID_USART0_TX << 4); /*ATC_DST_PER(peripheral_id);*/
+						| ATC_SRC_H2SEL_SW | ATC_DST_H2SEL_HW;
 
+				/* The source and destination need to be set based upon the
+				 * peripheral id */
+				switch(peripheral_id)
+				{
+				case AT91SAM9X5_ID_USART0:
+				    atslave->cfg |= ATC_DST_PER(AT_DMA_ID_USART0_TX) |
+				    ATC_SRC_PER(AT_DMA_ID_USART0_RX);
+				    break;
+                case AT91SAM9X5_ID_USART1:
+                    atslave->cfg |= ATC_DST_PER(AT_DMA_ID_USART1_TX) |
+                    ATC_SRC_PER(AT_DMA_ID_USART1_RX);
+                    break;
+                case AT91SAM9X5_ID_USART2:
+                    atslave->cfg |= ATC_DST_PER(AT_DMA_ID_USART2_TX) |
+                    ATC_SRC_PER(AT_DMA_ID_USART2_RX);
+                    break;
+                case AT91SAM9X5_ID_USART3:
+                    atslave->cfg |= ATC_DST_PER(AT_DMA_ID_USART3_TX) |
+                    ATC_SRC_PER(AT_DMA_ID_USART3_RX);
+                    break;
+                case AT91SAM9X5_ID_UART0:
+                    atslave->cfg |= ATC_DST_PER(AT_DMA_ID_UART0_TX) |
+                    ATC_SRC_PER(AT_DMA_ID_UART0_RX);
+                    break;
+                case AT91SAM9X5_ID_UART1:
+                    atslave->cfg |= ATC_DST_PER(AT_DMA_ID_UART1_TX) |
+                    ATC_SRC_PER(AT_DMA_ID_UART1_RX);
+                    break;
+				}
 				pdata->dma_tx_slave = atslave;
 			}
 #endif
