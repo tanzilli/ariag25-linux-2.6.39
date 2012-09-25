@@ -105,79 +105,6 @@ static struct spi_board_info cm_spi_devices[] = {
 #endif
 };
 
-/*
- * NAND flash
- */
-static struct mtd_partition __initdata cm_nand_partition[] = {
-	{
-		.name	= "Partition 1",
-		.offset	= 0,
-		.size	= SZ_64M,
-	},
-	{
-		.name	= "Partition 2",
-		.offset	= MTDPART_OFS_NXTBLK,
-		.size	= MTDPART_SIZ_FULL,
-	},
-};
-
-static struct mtd_partition * __init nand_partitions(int size, int *num_partitions)
-{
-	*num_partitions = ARRAY_SIZE(cm_nand_partition);
-	return cm_nand_partition;
-}
-
-/* det_pin is not connected */
-static struct atmel_nand_data __initdata cm_nand_data = {
-	.ale		= 21,
-	.cle		= 22,
-	.enable_pin	= AT91_PIN_PD4,
-	.partition_info	= nand_partitions,
-#if defined(CONFIG_MTD_NAND_AT91_BUSWIDTH_16)
-	.bus_width_16	= 1,
-#endif
-};
-
-static struct sam9_smc_config __initdata cm_nand_smc_config = {
-	.ncs_read_setup		= 0,
-	.nrd_setup		= 1,
-	.ncs_write_setup	= 0,
-	.nwe_setup		= 1,
-
-	.ncs_read_pulse		= 6,
-	.nrd_pulse		= 4,
-	.ncs_write_pulse	= 5,
-	.nwe_pulse		= 3,
-
-	.read_cycle		= 6,
-	.write_cycle		= 5,
-
-	.mode			= AT91_SMC_READMODE | AT91_SMC_WRITEMODE | AT91_SMC_EXNWMODE_DISABLE,
-	.tdf_cycles		= 1,
-};
-
-static void __init cm_add_device_nand(void)
-{
-	/* setup bus-width (8 or 16) */
-	if (cm_nand_data.bus_width_16)
-		cm_nand_smc_config.mode |= AT91_SMC_DBW_16;
-	else
-		cm_nand_smc_config.mode |= AT91_SMC_DBW_8;
-
-	/* revision of board modify NAND wiring */
-	if (cm_is_revA()) {
-		cm_nand_data.bus_on_d0 = 1;
-		cm_nand_data.rdy_pin = AT91_PIN_PD6;
-	} else {
-		cm_nand_data.bus_on_d0 = 0;
-		cm_nand_data.rdy_pin = AT91_PIN_PD5;
-	}
-
-	/* configure chip-select 3 (NAND) */
-	sam9_smc_configure(3, &cm_nand_smc_config);
-
-	at91_add_device_nand(&cm_nand_data);
-}
 
 /*
  * LEDs
@@ -214,16 +141,9 @@ void __init cm_board_init(u32 *cm_config)
 			break;
 		}
 	}
-	/* NAND */
-	cm_add_device_nand();
 	/* I2C */
 	at91_add_device_i2c(0, cm_i2c_devices, ARRAY_SIZE(cm_i2c_devices));
 	*cm_config |= CM_CONFIG_I2C0_ENABLE;
 	/* LEDs */
 	at91_gpio_leds(cm_leds, ARRAY_SIZE(cm_leds));
-
-	if (cm_is_revA())
-		printk(KERN_CRIT "AT91: CM rev A\n");
-	else
-		printk(KERN_CRIT "AT91: CM rev B and higher\n");
 }
