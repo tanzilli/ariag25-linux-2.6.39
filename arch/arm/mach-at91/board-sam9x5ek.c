@@ -53,8 +53,36 @@ static void __init ek_map_io(void)
 	/* Initialize processor and DBGU */
 	cm_map_io();
 
-	/* USART0 on ttyS1. (Rx, Tx) */
-	at91_register_uart(AT91SAM9X5_ID_USART0, 1, 0);
+	/* USART0 on /dev/ttyS1. (RX,TX,RTS,CTS) */
+	at91_register_uart(AT91SAM9X5_ID_USART0,1,ATMEL_UART_RTS|ATMEL_UART_CTS);
+
+	/* Pull-up on RXD0 */
+	at91_set_A_periph(AT91_PIN_PA1,1);  
+	
+	/* USART1 on /dev/ttyS2. (RX,TX,RTS,CTS) */
+	at91_register_uart(AT91SAM9X5_ID_USART1,2,ATMEL_UART_RTS|ATMEL_UART_CTS);
+	/* Pull-up on RXD1 */
+	at91_set_A_periph(AT91_PIN_PA6,1);  
+
+	/* USART2 on /dev/ttyS3. (RX,TX) */
+	at91_register_uart(AT91SAM9X5_ID_USART2,3,0);
+	/* Pull-up on RXD2 */
+	at91_set_A_periph(AT91_PIN_PA8,1);
+	
+	/* USART3 on /dev/ttyS4. (RX,TX,RTS,CTS) */
+	at91_register_uart(AT91SAM9X5_ID_USART3,4,ATMEL_UART_RTS|ATMEL_UART_CTS);
+	/* Pull-up on RXD3 */
+	at91_set_B_periph(AT91_PIN_PC23,1);
+
+	/* UART0 on /dev/ttyS5. (RX,TX) */
+	/*at91_register_uart(AT91SAM9X5_ID_UART0,5,0); */
+	/* Pull-up on URXD0 */
+	/*at91_set_C_periph(AT91_PIN_PC9,1); */
+
+	/* UART1 on /dev/ttyS6. (RX,TX) */
+	/*at91_register_uart(AT91SAM9X5_ID_UART1,6,0); */
+	/* Pull-up on URXD1 */
+	/*at91_set_C_periph(AT91_PIN_PC17,1); */
 }
 
 /*
