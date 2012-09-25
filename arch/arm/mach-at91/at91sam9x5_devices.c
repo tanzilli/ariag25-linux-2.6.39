@@ -1609,7 +1609,7 @@ static struct resource usart0_resources[] = {
 
 static struct atmel_uart_data usart0_data = {
 	.use_dma_tx	= 1,
-	.use_dma_rx	= 0,				/* doesn't support */
+	.use_dma_rx	= 1,
 };
 
 static u64 usart0_dmamask = DMA_BIT_MASK(32);
