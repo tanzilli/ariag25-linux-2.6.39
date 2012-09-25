@@ -192,13 +192,17 @@ static void __init ek_board_init(void)
 
 	cm_board_init(&cm_config);
 	ek_board_configure_pins();
+
 	/* Serial */
 	at91_add_device_serial();
+
 	/* USB HS Host */
 	at91_add_device_usbh_ohci(&ek_usbh_fs_data);
 	at91_add_device_usbh_ehci(&ek_usbh_hs_data);
+
 	/* USB HS Device */
 	at91_add_device_usba(&ek_usba_udc_data);
+
 	/* Ethernet */
 	at91_add_device_eth(0, &ek_macb0_data);
 	/* at91_add_device_eth(1, &ek_macb1_data); */
@@ -208,6 +212,10 @@ static void __init ek_board_init(void)
 
 	/* MMC */
 	at91_add_device_mci(0, &mci0_data);
+
+	/* Add 1-wire bus */
+	at91_add_device_w1();
+
 }
 
 MACHINE_START(AT91SAM9X5EK, "Acme Systems Aria G25")
