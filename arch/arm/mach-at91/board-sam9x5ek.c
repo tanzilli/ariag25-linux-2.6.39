@@ -48,6 +48,9 @@
 #include "generic.h"
 #include <mach/board-sam9x5.h>
 
+#include <linux/w1-gpio.h>
+
+
 static void __init ek_map_io(void)
 {
 	/* Initialize processor and DBGU */
@@ -159,6 +162,29 @@ static void __init ek_board_configure_pins(void)
 {
 	  ek_macb0_data.phy_irq_pin = 0;
 }
+
+#if defined(CONFIG_W1_MASTER_GPIO) || defined(CONFIG_W1_MASTER_GPIO_MODULE)
+static struct w1_gpio_platform_data w1_gpio_pdata = {
+	.pin		= AT91_PIN_PA21,
+	.is_open_drain  = 1,
+};
+
+static struct platform_device w1_device = {
+	.name			= "w1-gpio",
+	.id			= -1,
+	.dev.platform_data	= &w1_gpio_pdata,
+};
+
+static void __init at91_add_device_w1(void)
+{
+	at91_set_GPIO_periph(w1_gpio_pdata.pin, 1);
+	at91_set_multi_drive(w1_gpio_pdata.pin, 1);
+	platform_device_register(&w1_device);
+}
+#else
+void __init at91_add_device_w1(void) {}
+#endif
+
 
 static void __init ek_board_init(void)
 {
