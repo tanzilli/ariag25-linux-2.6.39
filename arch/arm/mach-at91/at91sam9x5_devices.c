@@ -1436,17 +1436,22 @@ static struct platform_device at91sam9x5_pwm_device = {
 
 void __init at91_add_device_pwm(u32 mask)
 {
-	if (mask & (1 << AT91_PWM0))
-		at91_set_B_periph(AT91_PIN_PB11, 1);	/* enable PWM0 */
+	if (mask & (1 << AT91_PWM0)) {
+		at91_set_C_periph(AT91_PIN_PC18, 1);	/* enable PWM0 */
+	}
 
-	if (mask & (1 << AT91_PWM1))
-		at91_set_B_periph(AT91_PIN_PB12, 1);	/* enable PWM1 */
+	if (mask & (1 << AT91_PWM1)) {
+		at91_set_C_periph(AT91_PIN_PC19, 1);	/* enable PWM1 */
+	}
 
-	if (mask & (1 << AT91_PWM2))
-		at91_set_B_periph(AT91_PIN_PB13, 1);	/* enable PWM2 */
 
-	if (mask & (1 << AT91_PWM3))
-		at91_set_B_periph(AT91_PIN_PB14, 1);	/* enable PWM3 */
+	if (mask & (1 << AT91_PWM2)) {
+		at91_set_C_periph(AT91_PIN_PC20, 1);	/* enable PWM2 */
+	}
+
+	if (mask & (1 << AT91_PWM3)) {
+		at91_set_C_periph(AT91_PIN_PC21, 1);	/* enable PWM3 */
+	}
 
 	pwm_mask = mask;
 
